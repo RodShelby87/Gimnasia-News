@@ -37,7 +37,15 @@ export default async function handler(req, res) {
         };
       })
       // ONLY TODAY (Argentina time)
-      .filter((a) => a.dateOnly === today)
+      .filter((a) => {
+  const articleDate = new Date(a.time);
+
+  const now = new Date();
+  const diffHours =
+    (now.getTime() - articleDate.getTime()) / (1000 * 60 * 60);
+
+  return diffHours <= 24;
+})
       // newest first
       .sort((a, b) => new Date(b.time) - new Date(a.time));
 
