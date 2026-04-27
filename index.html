@@ -3,310 +3,289 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hub GELP - Noticias del Lobo</title>
+    <title>GELP Hub - Noticias y Resultados</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --bg-body: #f0f2f5;
-            --bg-nav: #002d5a; /* Azul GELP */
+            --bg-body: #f4f7f6;
+            --bg-nav: #002d5a;
             --bg-card: #ffffff;
-            --text-main: #1a1a1a;
-            --text-muted: #555555;
+            --text-main: #2c3e50;
+            --text-muted: #7f8c8d;
             --accent: #002d5a;
             --border: #dcdde1;
         }
 
         [data-theme="dark"] {
-            --bg-body: #121212;
-            --bg-nav: #0a0a0a;
-            --bg-card: #1e1e1e;
-            --text-main: #e0e0e0;
-            --text-muted: #aaaaaa;
-            --accent: #4a90e2;
-            --border: #333333;
+            --bg-body: #1a1a1a;
+            --bg-nav: #000000;
+            --bg-card: #2d2d2d;
+            --text-main: #ecf0f1;
+            --text-muted: #bdc3c7;
+            --accent: #3498db;
+            --border: #404040;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        body { background-color: var(--bg-body); color: var(--text-main); transition: 0.3s; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+        body { background-color: var(--bg-body); color: var(--text-main); transition: 0.3s ease; }
 
-        header { background-color: var(--bg-nav); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
-        .logo { font-size: 1.5rem; font-weight: bold; display: flex; align-items: center; gap: 10px; }
-        
-        .header-btns { display: flex; gap: 10px; }
-        button { cursor: pointer; border: none; border-radius: 5px; padding: 8px 15px; transition: 0.2s; }
+        header { background-color: var(--bg-nav); color: white; padding: 1rem 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        .logo { font-size: 1.4rem; font-weight: 800; letter-spacing: 1px; }
+        .header-controls { display: flex; gap: 10px; }
+
+        button { cursor: pointer; border: none; border-radius: 6px; padding: 10px 15px; font-weight: bold; transition: 0.2s; }
+        .btn-theme { background: rgba(255,255,255,0.15); color: white; }
         .btn-refresh { background: #27ae60; color: white; }
-        .btn-theme { background: rgba(255,255,255,0.2); color: white; }
 
-        .container { display: flex; max-width: 1300px; margin: 20px auto; gap: 20px; padding: 0 15px; }
+        .container { display: flex; max-width: 1400px; margin: 25px auto; gap: 25px; padding: 0 20px; }
         
-        /* Sidebar Index */
-        .sidebar { width: 220px; background: var(--bg-card); border-radius: 10px; border: 1px solid var(--border); height: fit-content; overflow: hidden; }
-        .sidebar-item { padding: 15px; cursor: pointer; border-bottom: 1px solid var(--border); font-weight: 600; }
-        .sidebar-item:hover, .sidebar-item.active { background: var(--accent); color: white; }
+        /* Sidebar */
+        .sidebar { width: 240px; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); height: fit-content; position: sticky; top: 90px; }
+        .sidebar-nav { list-style: none; }
+        .nav-item { padding: 15px 20px; cursor: pointer; font-weight: 600; border-bottom: 1px solid var(--border); transition: 0.2s; }
+        .nav-item:hover { background: rgba(0,0,0,0.05); }
+        .nav-item.active { background: var(--accent); color: white; }
 
         .main-content { flex: 1; min-width: 0; }
 
-        /* News Sections */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 5px; }
-        .tab { background: var(--bg-card); border: 1px solid var(--border); padding: 8px 20px; border-radius: 20px; font-size: 14px; white-space: nowrap; cursor: pointer; }
+        /* Tabs Deporte */
+        .tabs { display: flex; gap: 12px; margin-bottom: 25px; overflow-x: auto; padding-bottom: 10px; }
+        .tab { background: var(--bg-card); border: 1px solid var(--border); padding: 10px 22px; border-radius: 30px; cursor: pointer; white-space: nowrap; font-weight: 600; }
         .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
 
-        /* Tools Bar */
-        .tools { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        .tools input, .tools select { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main); min-width: 200px; }
+        /* Search Bar */
+        .tools-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 25px; }
+        input, select { padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main); width: 100%; font-size: 14px; }
 
         /* News Cards */
-        .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-        .card { background: var(--bg-card); border-radius: 10px; border: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
-        .card-meta { display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; color: var(--accent); text-transform: uppercase; }
-        .card-title { font-size: 1.1rem; font-weight: bold; line-height: 1.3; }
-        .card-summary { font-size: 14px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-        .card-link { margin-top: auto; text-decoration: none; background: var(--accent); color: white; text-align: center; padding: 10px; border-radius: 5px; font-size: 14px; font-weight: bold; }
-
-        /* Live Score Banner */
-        .live-banner { background: #c0392b; color: white; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; display: none; justify-content: space-between; align-items: center; }
-        .live-banner.active { display: flex; }
+        .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 25px; }
+        .card { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 15px; animation: fadeIn 0.5s ease; }
+        .card-top { display: flex; justify-content: space-between; align-items: center; }
+        .portal-tag { font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; }
+        .time-tag { font-size: 11px; color: var(--text-muted); }
+        .card-title { font-size: 1.15rem; font-weight: 700; line-height: 1.4; }
+        .card-desc { font-size: 14px; color: var(--text-muted); line-height: 1.5; }
+        .card-btn { margin-top: auto; text-decoration: none; background: var(--accent); color: white; text-align: center; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 14px; }
 
         /* Tables */
-        .table-container { background: var(--bg-card); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: var(--bg-nav); color: white; padding: 12px; text-align: left; font-size: 14px; }
-        td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
-        tr.highlight { background: rgba(0, 45, 90, 0.1); font-weight: bold; }
+        .table-box { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th { background: var(--bg-nav); color: white; padding: 15px; text-align: left; font-size: 13px; }
+        td { padding: 15px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        tr.highlight { background: rgba(52, 152, 219, 0.15); font-weight: bold; }
 
-        @media (max-width: 768px) { .container { flex-direction: column; } .sidebar { width: 100%; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 850px) { .container { flex-direction: column; } .sidebar { width: 100%; position: static; } .tools-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body data-theme="light">
 
     <header>
-        <div class="logo"><i class="fa-solid fa-shield-halved"></i> GELP HOY</div>
-        <div class="header-btns">
+        <div class="logo">GELP DATA CENTER</div>
+        <div class="header-controls">
             <button class="btn-theme" onclick="toggleTheme()" id="themeBtn"><i class="fa-solid fa-moon"></i></button>
-            <button class="btn-refresh" onclick="refreshAll()"><i class="fa-solid fa-sync"></i> Actualizar</button>
+            <button class="btn-refresh" onclick="refreshAll()"><i class="fa-solid fa-sync-alt"></i></button>
         </div>
     </header>
 
     <div class="container">
         <aside class="sidebar">
-            <div class="sidebar-item active" onclick="showSection('noticias', this)">Noticias</div>
-            <div class="sidebar-item" onclick="showSection('posiciones', this)">Posiciones</div>
+            <div class="nav-item active" id="nav-noticias" onclick="switchMainTab('noticias')">Noticias de Hoy</div>
+            <div class="nav-item" id="nav-posiciones" onclick="switchMainTab('posiciones')">Posiciones</div>
         </aside>
 
         <main class="main-content">
-            <div id="section-noticias" class="content-section">
-                <div class="tabs" id="sportTabs">
-                    <div class="tab active" onclick="setSport('Todo', this)">Todo</div>
-                    <div class="tab" onclick="setSport('Fútbol', this)">Fútbol</div>
-                    <div class="tab" onclick="setSport('Básquet', this)">Básquet</div>
-                    <div class="tab" onclick="setSport('Vóley', this)">Vóley</div>
+            <section id="section-noticias">
+                <div class="tabs">
+                    <div class="tab active" onclick="setSportFilter('Todo', this)">Todo</div>
+                    <div class="tab" onclick="setSportFilter('Fútbol', this)">Fútbol</div>
+                    <div class="tab" onclick="setSportFilter('Básquet', this)">Básquet</div>
+                    <div class="tab" onclick="setSportFilter('Vóley', this)">Vóley</div>
                 </div>
 
-                <div class="live-banner" id="liveBanner">
-                    <div>
-                        <div id="liveLeague" style="font-size: 11px; font-weight: bold; opacity: 0.8;"></div>
-                        <div id="liveMatch" style="font-size: 18px; font-weight: bold;"></div>
-                    </div>
-                    <div id="liveScore" style="font-size: 24px; font-weight: bold;"></div>
-                </div>
-
-                <div class="tools">
-                    <input type="text" id="searchBar" placeholder="Buscar noticia..." oninput="filterNews()">
-                    <select id="portalFilter" onchange="filterNews()">
+                <div class="tools-grid">
+                    <input type="text" id="newsSearch" placeholder="Buscar en las noticias de hoy..." oninput="renderFilteredNews()">
+                    <select id="portalSelect" onchange="renderFilteredNews()">
                         <option value="all">Todos los portales</option>
                     </select>
                 </div>
 
                 <div class="news-grid" id="newsGrid">
                     </div>
-            </div>
+            </section>
 
-            <div id="section-posiciones" class="content-section" style="display: none;">
-                <div class="tools">
-                    <select id="tournamentSelect" onchange="fetchStandings()">
-                        <option value="128">Liga Profesional Argentina</option>
+            <section id="section-posiciones" style="display: none;">
+                <div class="tools-grid">
+                    <select id="leagueSelect" onchange="fetchStandings()">
+                        <option value="128">Liga Profesional (AFA)</option>
+                        <option value="130">Copa de la Liga</option>
                     </select>
                 </div>
-                <div class="table-container">
+                <div class="table-box">
                     <table>
                         <thead>
                             <tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>V</th><th>E</th><th>D</th></tr>
                         </thead>
-                        <tbody id="standingsTable"></tbody>
+                        <tbody id="standingsBody"></tbody>
                     </table>
                 </div>
-            </div>
+            </section>
         </main>
     </div>
 
     <script>
-        const NEWS_API_KEY = '034d49f86772190e8bd3efe1c0a5e29e';
-        const FOOTBALL_API_KEY = 'd07a089a76b2c5a4c9f66f80337665ea';
+        const NEWS_KEY = '034d49f86772190e8bd3efe1c0a5e29e';
+        const SPORT_KEY = 'd07a089a76b2c5a4c9f66f80337665ea';
         const GELP_ID = 455;
 
-        let rawNews = [];
-        let currentSport = 'Todo';
+        let newsStore = [];
+        let activeSport = 'Todo';
 
-        // Inicialización
-        window.onload = refreshAll;
+        // --- INICIO Y PERSISTENCIA DE TEMA ---
+        window.onload = () => {
+            const savedTheme = localStorage.getItem('gelp-theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+            refreshAll();
+        };
 
-        function refreshAll() {
-            fetchNews();
-            fetchLiveMatch();
-            fetchStandings();
+        function toggleTheme() {
+            const current = document.body.getAttribute('data-theme');
+            const next = current === 'light' ? 'dark' : 'light';
+            document.body.setAttribute('data-theme', next);
+            localStorage.setItem('gelp-theme', next);
+            updateThemeIcon(next);
         }
 
-        // --- LÓGICA DE NOTICIAS ---
+        function updateThemeIcon(theme) {
+            const btn = document.getElementById('themeBtn');
+            btn.innerHTML = theme === 'light' ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+        }
+
+        // --- NAVEGACIÓN ---
+        function switchMainTab(tab) {
+            document.getElementById('section-noticias').style.display = tab === 'noticias' ? 'block' : 'none';
+            document.getElementById('section-posiciones').style.display = tab === 'posiciones' ? 'block' : 'none';
+            document.getElementById('nav-noticias').classList.toggle('active', tab === 'noticias');
+            document.getElementById('nav-posiciones').classList.toggle('active', tab === 'posiciones');
+            if(tab === 'posiciones') fetchStandings();
+        }
+
+        function setSportFilter(sport, el) {
+            activeSport = sport;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            renderFilteredNews();
+        }
+
+        // --- NOTICIAS ---
         async function fetchNews() {
             const grid = document.getElementById('newsGrid');
-            grid.innerHTML = "<p>Actualizando noticias...</p>";
+            grid.innerHTML = "<p style='grid-column: 1/-1; text-align: center;'>Consultando portales...</p>";
             
-            // Query más amplia para traer más resultados, luego filtramos nosotros
-            const query = encodeURIComponent('Gimnasia La Plata');
-            const url = `https://gnews.io/api/v4/search?q=${query}&lang=es&country=ar&max=50&apikey=${NEWS_API_KEY}`;
+            // Buscamos específicamente el club
+            const url = `https://gnews.io/api/v4/search?q="Gimnasia y Esgrima La Plata"&lang=es&country=ar&max=50&apikey=${NEWS_KEY}`;
 
             try {
-                const response = await fetch(url);
-                const data = await response.json();
+                const res = await fetch(url);
+                const data = await res.json();
                 
-                // FILTRO ESTRICTO: Solo hoy (Hora Local)
-                const localToday = new Date().toLocaleDateString('en-CA'); // Formato YYYY-MM-DD
-                
-                rawNews = (data.articles || []).filter(art => {
-                    const artDate = art.publishedAt.split('T')[0];
-                    return artDate === localToday;
-                });
+                if (data.errors) throw new Error(data.errors[0]);
 
-                // Ordenar: Más reciente primero
-                rawNews.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+                const localToday = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+                
+                // Filtrar solo hoy
+                newsStore = (data.articles || []).filter(a => a.publishedAt.startsWith(localToday));
+                
+                // Ordenar por hora
+                newsStore.sort((a,b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
                 updatePortalList();
-                filterNews();
+                renderFilteredNews();
             } catch (e) {
-                grid.innerHTML = "<p>Error al conectar con el servidor de noticias.</p>";
+                grid.innerHTML = `<p style='grid-column: 1/-1; color: #e74c3c;'>Error: ${e.message}. Verifica tu conexión o el límite de la API.</p>`;
             }
         }
 
-        function filterNews() {
-            const searchText = document.getElementById('searchBar').value.toLowerCase();
-            const selectedPortal = document.getElementById('portalFilter').value;
+        function renderFilteredNews() {
             const grid = document.getElementById('newsGrid');
+            const search = document.getElementById('newsSearch').value.toLowerCase();
+            const portal = document.getElementById('portalSelect').value;
 
-            // Definición de palabras clave por deporte para el filtrado de pestañas
-            const sportKeywords = {
-                'Fútbol': ['fútbol', 'futbol', 'gol', 'lpf', 'copa', 'estancia chica', 'mendez'],
+            const keywords = {
+                'Fútbol': ['fútbol', 'futbol', 'lpf', 'mendez', 'estancia', 'gol', 'afa'],
                 'Básquet': ['básquet', 'basquet', 'nacional', 'triple', 'tablero'],
-                'Vóley': ['vóley', 'voley', 'lobas', 'remate', 'set']
+                'Vóley': ['vóley', 'voley', 'lobas', 'set', 'remate']
             };
 
-            const filtered = rawNews.filter(art => {
-                const text = (art.title + art.description).toLowerCase();
-                
-                const matchesSport = currentSport === 'Todo' || 
-                                    sportKeywords[currentSport].some(key => text.includes(key));
-                
-                const matchesSearch = text.includes(searchText);
-                const matchesPortal = selectedPortal === 'all' || art.source.name === selectedPortal;
-                
+            const filtered = newsStore.filter(n => {
+                const content = (n.title + n.description).toLowerCase();
+                const matchesSport = activeSport === 'Todo' || keywords[activeSport].some(k => content.includes(k));
+                const matchesSearch = content.includes(search);
+                const matchesPortal = portal === 'all' || n.source.name === portal;
                 return matchesSport && matchesSearch && matchesPortal;
             });
 
-            grid.innerHTML = filtered.length ? "" : "<p>No hay noticias de este deporte publicadas hoy.</p>";
+            if(filtered.length === 0) {
+                grid.innerHTML = "<p style='grid-column: 1/-1; text-align: center;'>No se encontraron noticias publicadas el día de hoy.</p>";
+                return;
+            }
 
-            filtered.forEach(art => {
-                const time = new Date(art.publishedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                grid.innerHTML += `
+            grid.innerHTML = filtered.map(n => {
+                const time = new Date(n.publishedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+                return `
                     <div class="card">
-                        <div class="card-meta">
-                            <span>${art.source.name}</span>
-                            <span>${time}</span>
+                        <div class="card-top">
+                            <span class="portal-tag">${n.source.name}</span>
+                            <span class="time-tag">${time}</span>
                         </div>
-                        <div class="card-title">${art.title}</div>
-                        <div class="card-summary">${art.description}</div>
-                        <a href="${art.url}" target="_blank" class="card-link">Ver Noticia Completa</a>
+                        <div class="card-title">${n.title}</div>
+                        <div class="card-desc">${n.description || ''}</div>
+                        <a href="${n.url}" target="_blank" rel="noopener noreferrer" class="card-btn">Leer Noticia Original</a>
                     </div>
                 `;
-            });
-        }
-
-        // --- LÓGICA DE FUTBOL (EN VIVO Y POSICIONES) ---
-        async function fetchLiveMatch() {
-            const banner = document.getElementById('liveBanner');
-            try {
-                const res = await fetch(`https://v3.football.api-sports.io/fixtures?team=${GELP_ID}&live=all`, {
-                    headers: { 'x-apisports-key': FOOTBALL_API_KEY }
-                });
-                const data = await res.json();
-                
-                if(data.response && data.response.length > 0) {
-                    const m = data.response[0];
-                    document.getElementById('liveLeague').innerText = m.league.name;
-                    document.getElementById('liveMatch').innerText = `${m.teams.home.name} vs ${m.teams.away.name}`;
-                    document.getElementById('liveScore').innerText = `${m.goals.home} - ${m.goals.away}`;
-                    banner.classList.add('active');
-                } else {
-                    banner.classList.remove('active');
-                }
-            } catch(e) { banner.classList.remove('active'); }
-        }
-
-        async function fetchStandings() {
-            const table = document.getElementById('standingsTable');
-            const leagueId = document.getElementById('tournamentSelect').value;
-            const currentYear = new Date().getFullYear();
-
-            try {
-                const res = await fetch(`https://v3.football.api-sports.io/standings?league=${leagueId}&season=${currentYear}`, {
-                    headers: { 'x-apisports-key': FOOTBALL_API_KEY }
-                });
-                const data = await res.json();
-                const standings = data.response[0].league.standings[0];
-                
-                table.innerHTML = "";
-                standings.forEach(t => {
-                    const rowClass = t.team.id === GELP_ID ? 'class="highlight"' : '';
-                    table.innerHTML += `
-                        <tr ${rowClass}>
-                            <td>${t.rank}</td>
-                            <td>${t.team.name}</td>
-                            <td>${t.points}</td>
-                            <td>${t.all.played}</td>
-                            <td>${t.all.win}</td>
-                            <td>${t.all.draw}</td>
-                            <td>${t.all.lose}</td>
-                        </tr>
-                    `;
-                });
-            } catch(e) { table.innerHTML = "<tr><td colspan='7'>No se pudo cargar la tabla real.</td></tr>"; }
-        }
-
-        // --- UTILIDADES DE UI ---
-        function setSport(sport, el) {
-            currentSport = sport;
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            el.classList.add('active');
-            filterNews();
-        }
-
-        function showSection(id, el) {
-            document.querySelectorAll('.content-section').forEach(s => s.style.display = 'none');
-            document.getElementById('section-' + id).style.display = 'block';
-            document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-            el.classList.add('active');
+            }).join('');
         }
 
         function updatePortalList() {
-            const select = document.getElementById('portalFilter');
-            const portals = [...new Set(rawNews.map(n => n.source.name))];
-            select.innerHTML = '<option value="all">Todos los portales</option>';
-            portals.forEach(p => select.innerHTML += `<option value="${p}">${p}</option>`);
+            const sel = document.getElementById('portalSelect');
+            const portals = [...new Set(newsStore.map(n => n.source.name))];
+            sel.innerHTML = '<option value="all">Todos los portales</option>' + 
+                            portals.map(p => `<option value="${p}">${p}</option>`).join('');
         }
 
-        function toggleTheme() {
-            const body = document.body;
-            const isDark = body.getAttribute('data-theme') === 'dark';
-            body.setAttribute('data-theme', isDark ? 'light' : 'dark');
-            document.getElementById('themeBtn').innerHTML = isDark ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+        // --- POSICIONES REALES ---
+        async function fetchStandings() {
+            const body = document.getElementById('standingsBody');
+            const leagueId = document.getElementById('leagueSelect').value;
+            body.innerHTML = "<tr><td colspan='7' style='text-align:center'>Cargando tabla oficial...</td></tr>";
+
+            try {
+                const res = await fetch(`https://v3.football.api-sports.io/standings?league=${leagueId}&season=2024`, {
+                    headers: { 'x-apisports-key': SPORT_KEY }
+                });
+                const data = await res.json();
+                const standings = data.response[0].league.standings[0];
+
+                body.innerHTML = standings.map(t => `
+                    <tr class="${t.team.id === GELP_ID ? 'highlight' : ''}">
+                        <td>${t.rank}</td>
+                        <td><img src="${t.team.logo}" width="20" style="vertical-align:middle; margin-right:8px"> ${t.team.name}</td>
+                        <td>${t.points}</td>
+                        <td>${t.all.played}</td>
+                        <td>${t.all.win}</td>
+                        <td>${t.all.draw}</td>
+                        <td>${t.all.lose}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                body.innerHTML = "<tr><td colspan='7'>Error al cargar datos reales de AFA.</td></tr>";
+            }
+        }
+
+        function refreshAll() {
+            fetchNews();
+            if(document.getElementById('section-posiciones').style.display === 'block') fetchStandings();
         }
     </script>
 </body>
