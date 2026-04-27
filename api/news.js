@@ -1,42 +1,51 @@
 export default async function handler(req, res) {
-  const todayAR = new Date().toLocaleDateString("en-CA", {
+  const API_KEY = "034d49f86772190e8bd3efe1c0a5e29e";
+
+  const today = new Date().toLocaleDateString("en-CA", {
     timeZone: "America/Argentina/Buenos_Aires",
   });
 
-  const portals = [
-    { name: "El Día", url: "https://www.eldia.com/seccion/gimnasia" },
-    { name: "Cielosports", url: "https://www.cielosports.com/gimnasia" },
-    { name: "0221", url: "https://www.0221.com.ar/gimnasia" },
-    { name: "Olé", url: "https://www.ole.com.ar/gimnasia" },
-  ];
+  const query =
+    '"Gimnasia La Plata" OR GELP OR "Gimnasia y Esgrima La Plata"';
 
-  const news = [];
+  const url = `https://gnews.io/api/v4/search?q=${encodeURIComponent(
+    query
+  )}&lang=es&country=ar&max=50&apikey=${API_KEY}`;
 
-  for (const portal of portals) {
-    try {
-      const r = await fetch(portal.url);
-      const html = await r.text();
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
 
-      const links = [...html.matchAll(/<a[^>]+href="([^"]+)"[^>]*>(.*?)<\/a>/g)];
+    if (!data.articles) {
+      return res.status(200).json([]);
+    }
 
-      for (const l of links) {
-        const link = l[1];
-        const title = l[2].replace(/<[^>]+>/g, "").trim();
+    const filtered = data.articles
+      .map((a) => {
+        const publishedDate = new Date(a.publishedAt).toLocaleDateString(
+          "en-CA",
+          { timeZone: "America/Argentina/Buenos_Aires" }
+        );
 
-        if (
-          title.toLowerCase().includes("gimnasia") &&
-          link.startsWith("http")
-        ) {
-          news.push({
-            title,
-            link,
-            source: portal.name,
-            time: todayAR,
-          });
-        }
-      }
-    } catch (e) {}
+        return {
+          title: a.title,
+          description: a.description,
+          link: a.url,
+          source: a.source?.name || "Desconocido",
+          time: a.publishedAt,
+          dateOnly: publishedDate,
+        };
+      })
+      // ONLY TODAY (Argentina time)
+      .filter((a) => a.dateOnly === today)
+      // newest first
+      .sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    return res.status(200).json(filtered);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Error fetching news",
+      details: error.message,
+    });
   }
-
-  res.status(200).json(news.slice(0, 40));
 }
