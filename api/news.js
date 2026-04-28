@@ -59,7 +59,6 @@ export default async function handler(req, res) {
       `https://gnews.io/api/v4/search` +
       `?q=Gimnasia+La+Plata` +
       `&lang=es&country=ar&max=10&sortby=publishedAt` +
-      `&from=${fromISO}` +
       `&apikey=${API_KEY}`;
 
     const resp = await fetch(url);
