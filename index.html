@@ -134,17 +134,8 @@ async function fetchNews() {
   }
 }
 
-function extractPortal(item) {
-  if (item.source) return item.source;
-  if (item.title && item.title.includes(" - ")) {
-    return item.title.split(" - ").pop();
-  }
-  return "Unknown";
-}
-
-function cleanTitle(title) {
-  if (!title) return "";
-  return title.includes(" - ") ? title.split(" - ")[0] : title;
+function getPortal(item) {
+  return item.source || item.sport || "Gimnasia";
 }
 
 function getSummary(title) {
@@ -156,18 +147,15 @@ function renderNews(news) {
   container.innerHTML = "";
 
   news.forEach(item => {
-    const clean = cleanTitle(item.title);
-    const portal = extractPortal(item);
-
     const div = document.createElement("div");
     div.className = "card";
 
     div.innerHTML = `
-      <a class="title" href="${item.link}" target="_blank">${clean}</a>
+      <a class="title" href="${item.link}" target="_blank">${item.title}</a>
       <div class="meta">
-        <span>${portal}</span>
+        <span>${getPortal(item)}</span>
       </div>
-      <div class="summary">${getSummary(clean)}</div>
+      <div class="summary">${getSummary(item.title)}</div>
     `;
 
     container.appendChild(div);
