@@ -2,23 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Soccer News</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gimnasia News</title>
   <style>
     :root {
       --bg: #ffffff;
-      --text: #111;
+      --text: #111111;
       --card: #f4f4f4;
-      --btn: #222;
-      --btnText: #fff;
+      --accent: #0b5ed7; /* default team color */
     }
 
     body.dark {
-      --bg: #0f0f0f;
-      --text: #ffffff;
-      --card: #1c1c1c;
-      --btn: #ffffff;
-      --btnText: #000;
+      --bg: #0f0f10;
+      --text: #f5f5f5;
+      --card: #1c1c1e;
     }
 
     body {
@@ -26,104 +23,132 @@
       font-family: Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
-      transition: 0.3s;
+      transition: all 0.3s ease;
     }
 
     header {
-      padding: 15px;
+      padding: 16px;
+      background: var(--accent);
+      color: white;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input {
+      padding: 6px;
+      border-radius: 6px;
+      border: none;
+      outline: none;
     }
 
     button {
-      padding: 8px 12px;
+      padding: 6px 10px;
       border: none;
+      border-radius: 6px;
       cursor: pointer;
-      background: var(--btn);
-      color: var(--btnText);
-      border-radius: 5px;
     }
 
     .container {
-      padding: 20px;
-      max-width: 800px;
-      margin: auto;
+      padding: 16px;
+      display: grid;
+      gap: 12px;
     }
 
     .card {
       background: var(--card);
-      padding: 15px;
-      margin-bottom: 10px;
+      padding: 12px;
       border-radius: 10px;
+      border-left: 4px solid var(--accent);
     }
 
-    a {
-      color: inherit;
+    .card a {
+      color: var(--accent);
       text-decoration: none;
       font-weight: bold;
     }
 
-    small {
-      display: block;
-      margin-top: 5px;
+    .meta {
+      font-size: 12px;
       opacity: 0.7;
+      margin-top: 4px;
     }
   </style>
 </head>
-
 <body>
 
 <header>
-  <h2>⚽ Soccer News</h2>
-  <button onclick="toggleTheme()">🌙 / ☀️</button>
+  <h1>Gimnasia News</h1>
+  <div class="controls">
+    <input id="search" placeholder="Search news..." oninput="filterNews()" />
+    <button onclick="toggleTheme()">Toggle mode</button>
+  </div>
 </header>
 
-<div class="container" id="news">Loading...</div>
+<div class="container" id="news"></div>
 
 <script>
-let newsData = [];
+const TEAM_COLOR = "#00a6ff"; // adjust to club color
+let allNews = [];
 
-// LOAD NEWS (ONLY SOCCER)
-async function loadNews() {
+async function fetchNews() {
   try {
     const res = await fetch("/api/news");
     const data = await res.json();
-
-    // FILTER ONLY SOCCER
-    newsData = data.filter(n => n.sport === "futbol");
-
-    renderNews();
-  } catch (err) {
-    console.error(err);
-    document.getElementById("news").innerHTML = "Error loading news";
+    allNews = data;
+    renderNews(allNews);
+  } catch (e) {
+    document.getElementById("news").innerHTML = "Error loading news.";
   }
 }
 
-// RENDER
-function renderNews() {
+function renderNews(news) {
   const container = document.getElementById("news");
+  container.innerHTML = "";
 
-  if (!newsData.length) {
-    container.innerHTML = "No soccer news found";
-    return;
-  }
+  news.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "card";
 
-  container.innerHTML = newsData.map(n => `
-    <div class="card">
-      <a href="${n.link}" target="_blank">${n.title}</a>
-      <small>${n.dateOnly || ""}</small>
-    </div>
-  `).join("");
+    div.innerHTML = `
+      <a href="${item.link}" target="_blank">${item.title}</a>
+      <div class="meta">${item.dateOnly || item.time || ""}</div>
+    `;
+
+    container.appendChild(div);
+  });
 }
 
-// DARK / LIGHT MODE
+function filterNews() {
+  const value = document.getElementById("search").value.toLowerCase();
+  const filtered = allNews.filter(n =>
+    n.title.toLowerCase().includes(value)
+  );
+  renderNews(filtered);
+}
+
 function toggleTheme() {
   document.body.classList.toggle("dark");
 }
 
-// INIT
-loadNews();
+// apply team color dynamically
+document.documentElement.style.setProperty("--accent", TEAM_COLOR);
+
+fetchNews();
 </script>
 
 </body>
