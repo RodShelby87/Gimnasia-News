@@ -2,17 +2,9 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
 
-  const API_KEY = process.env.GNEWS_API_KEY;
-  if (!API_KEY) {
-    return res.status(500).json({
-      error: "GNEWS_API_KEY no está configurada",
-    });
-  }
-
-  // ── In-memory cache (15 min) — skip cache if ?debug=1 ──
+  // ── In-memory cache (10 min) ──
   const now = Date.now();
-  const debugMode = req.query && req.query.debug === "1";
-  if (!debugMode && globalThis._newsCache && now - globalThis._newsCacheTime < 15 * 60 * 1000) {
+  if (globalThis._newsCache && now - globalThis._newsCacheTime < 10 * 60 * 1000) {
     return res.status(200).json(globalThis._newsCache);
   }
 
@@ -24,9 +16,9 @@ export default async function handler(req, res) {
 
   // ── Sport keyword map ──
   const SPORT_KW = {
-    basquet: ["básquet", "basquet", "basketball", "liga nacional de básquet", "triple", "tablero"],
-    voley:   ["vóley", "voley", "volleyball", "lobas", "set point"],
-    hockey:  ["hockey", "césped", "bocha"],
+    basquet: ["básquet", "basquet", "basketball", "liga nacional de básquet", "triple", "tablero", "boffelli", "polideportivo"],
+    voley:   ["vóley", "voley", "volleyball", "lobas", "set point", "vogel"],
+    hockey:  ["hockey", "césped", "lobizonas", "metropolitano"],
     esgrima: ["esgrima", "fencing", "sable", "florete", "espada"],
   };
 
@@ -36,113 +28,122 @@ export default async function handler(req, res) {
       if (kws.some(k => t.includes(k))) return sport;
     }
     const futbolKw = [
-      "gol","partido","torneo","liga profesional",
-      "copa argentina","afa","plantel","dt","técnico","refuerzo",
-      "fichaje","pase","transferencia","primera división",
-      "superliga","fecha","arbitro","penal","offside","director técnico",
-      "campeonato","eliminatoria"
+      "gol", "partido", "torneo", "liga profesional", "copa argentina",
+      "afa", "plantel", "dt", "técnico", "refuerzo", "fichaje", "pase",
+      "transferencia", "primera división", "superliga", "fecha", "arbitro",
+      "penal", "offside", "director técnico", "campeonato", "eliminatoria",
+      "apertura", "clausura", "playoff", "bosque", "estancia chica",
+      "barros schelotto", "pereyra", "clasificación", "goleador"
     ];
     if (futbolKw.some(k => t.includes(k))) return "futbol";
     const clubKw = [
-      "socios","elecciones","presidente","institución",
-      "aniversario","sede","asamblea","balance","cuota","estatuto"
+      "socios", "elecciones", "presidente", "institución", "aniversario",
+      "sede", "asamblea", "balance", "cuota", "estatuto", "comisión directiva",
+      "vitalicios", "marketing"
     ];
     if (clubKw.some(k => t.includes(k))) return "club";
     return "futbol";
   }
 
+  // ── Extract real source URL from Google News redirect ──
+  function extractRealUrl(googleUrl) {
+    // Google News RSS links look like: https://news.google.com/rss/articles/...
+    // We return as-is; they redirect to the real article
+    return googleUrl || "";
+  }
+
+  // ── Extract source name from Google News ──
+  function extractSource(block) {
+    const match = block.match(/<source[^>]*>(.*?)<\/source>/);
+    return match ? match[1].trim() : "Desconocido";
+  }
+
   try {
-    const url =
-      `https://gnews.io/api/v4/search` +
-      `?q=Gimnasia+La+Plata` +
-      `&lang=es&country=ar&max=10&sortby=publishedAt` +
-      `&apikey=${API_KEY}`;
+    // Google News RSS — no API key needed, excellent local coverage
+    const rssUrl =
+      "https://news.google.com/rss/search?" +
+      "q=Gimnasia+y+Esgrima+La+Plata" +
+      "&hl=es-419&gl=AR&ceid=AR:es-419";
 
-    const resp = await fetch(url);
-    const rawText = await resp.text();
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (e) {
-      return res.status(500).json({
-        error: "GNews no devolvió JSON válido",
-        rawResponse: rawText.substring(0, 500),
-      });
-    }
+    const resp = await fetch(rssUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; GelpNews/1.0)" },
+    });
 
     if (!resp.ok) {
       return res.status(resp.status).json({
-        error: "GNews API error",
+        error: "Google News RSS respondió con error",
         status: resp.status,
-        details: data,
       });
     }
 
-    if (!data.articles || data.articles.length === 0) {
-      return res.status(200).json({
-        articles: [],
-        debug: {
-          message: "GNews no devolvió artículos",
-          totalArticles: data.totalArticles || 0,
-          gnewsResponse: data,
-          queryUsed: "Gimnasia+La+Plata",
-          todayFilter: todayStr,
-        },
-      });
-    }
+    const xml = await resp.text();
 
-    const allMapped = data.articles.map(a => {
+    // Parse RSS items
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+
+    const allArticles = items.map(i => {
+      const block = i[1];
+      const title = (block.match(/<title>(.*?)<\/title>/) || [])[1] || "";
+      const link = (block.match(/<link>(.*?)<\/link>/) || [])[1] ||
+                   (block.match(/<link\/>\s*(https?:\/\/[^\s<]+)/) || [])[1] || "";
+      const pubDate = (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || "";
+      const source = extractSource(block);
+
+      // Description from RSS (often contains HTML snippet)
+      let desc = (block.match(/<description>(.*?)<\/description>/) || [])[1] || "";
+      // Clean HTML tags and CDATA
+      desc = desc
+        .replace(/<!\[CDATA\[/g, "").replace(/\]\]>/g, "")
+        .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+        .trim();
+      // Often the description is just a list of related articles — limit it
+      if (desc.length > 200) desc = desc.substring(0, 200).trim() + "…";
+
       const pubArg = new Date(
-        new Date(a.publishedAt).toLocaleString("en-US", {
+        new Date(pubDate).toLocaleString("en-US", {
           timeZone: "America/Argentina/Buenos_Aires",
         })
       );
+      const dateOnly = pubArg.toLocaleDateString("en-CA");
+
       return {
-        title:       a.title,
-        description: a.description || "",
-        url:         a.url,
-        image:       a.image || null,
-        publishedAt: a.publishedAt,
-        dateOnly:    pubArg.toLocaleDateString("en-CA"),
-        source:      (a.source && a.source.name) || "Desconocido",
-        sport:       detectSport((a.title || "") + " " + (a.description || "")),
+        title: title.replace(/<!\[CDATA\[/g, "").replace(/\]\]>/g, "").replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim(),
+        description: desc,
+        url: link.trim(),
+        image: null,
+        publishedAt: pubDate ? new Date(pubDate).toISOString() : "",
+        dateOnly,
+        source,
+        sport: detectSport(title + " " + desc),
       };
     });
 
-    const filtered = allMapped
+    // Filter today only, sort newest first
+    const todayNews = allArticles
       .filter(a => a.dateOnly === todayStr)
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
-    // If no articles pass the date filter, show debug info
-    if (filtered.length === 0 && debugMode) {
-      return res.status(200).json({
-        articles: [],
-        debug: {
-          message: "GNews devolvió artículos pero ninguno es de hoy",
-          todayFilter: todayStr,
-          articlesReceived: allMapped.map(a => ({
-            title: a.title,
-            dateOnly: a.dateOnly,
-            publishedAt: a.publishedAt,
-          })),
-        },
-      });
-    }
+    const recentNews = allArticles
+      .filter(a => a.dateOnly !== todayStr)
+      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
+      .slice(0, 10); // keep max 10 recent
 
-    if (filtered.length === 0) {
-      return res.status(200).json([]);
-    }
+    const result = {
+      today: todayNews,
+      recent: recentNews,
+      todayDate: todayStr,
+    };
 
-    globalThis._newsCache = filtered;
+    globalThis._newsCache = result;
     globalThis._newsCacheTime = now;
 
-    return res.status(200).json(filtered);
+    return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({
       error: "Error al obtener noticias",
       details: err.message,
-      stack: err.stack,
     });
   }
 }
