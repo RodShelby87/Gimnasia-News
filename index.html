@@ -9,8 +9,8 @@
 body {
     margin:0;
     font-family: Arial;
-    background: #f4f6f9;
-    color: #111;
+    background:#f4f6f9;
+    color:#111;
 }
 
 .dark {
@@ -28,7 +28,7 @@ header {
 }
 
 button {
-    margin-left:8px;
+    margin-left:6px;
     padding:8px;
     cursor:pointer;
 }
@@ -37,6 +37,25 @@ button {
     max-width:1000px;
     margin:auto;
     padding:20px;
+}
+
+.tabs {
+    display:flex;
+    gap:10px;
+    margin:10px 0;
+    flex-wrap:wrap;
+}
+
+.tab {
+    padding:8px 12px;
+    background:#ddd;
+    border-radius:20px;
+    cursor:pointer;
+}
+
+.tab.active {
+    background:#002d5a;
+    color:white;
 }
 
 .card {
@@ -64,25 +83,6 @@ button {
 input, select {
     padding:8px;
 }
-.tabs {
-    display:flex;
-    gap:10px;
-    margin:10px 0;
-}
-.tab {
-    padding:8px 12px;
-    background:#ddd;
-    cursor:pointer;
-    border-radius:20px;
-}
-.tab.active {
-    background:#002d5a;
-    color:white;
-}
-
-.dark .tab {
-    background:#334155;
-}
 </style>
 </head>
 
@@ -98,106 +98,128 @@ input, select {
 
 <div class="container">
 
+<!-- SPORT TABS -->
 <div class="tabs">
-<div class="tab active" onclick="setTab('news')">Noticias</div>
-<div class="tab" onclick="setTab('table')">Posiciones</div>
+<div class="tab active" onclick="setSport('all')">Todo</div>
+<div class="tab" onclick="setSport('futbol')">Fútbol</div>
+<div class="tab" onclick="setSport('basquet')">Básquet</div>
+<div class="tab" onclick="setSport('voley')">Vóley</div>
 </div>
 
+<!-- FILTERS -->
 <div class="topbar">
 <input id="search" placeholder="Buscar..." oninput="renderNews()">
+
 <select id="sourceFilter" onchange="renderNews()">
 <option value="">Todos los portales</option>
 </select>
 </div>
 
+<!-- NEWS -->
 <div id="news"></div>
 
+<!-- TABLE -->
 <div id="table" style="display:none">
-<h3>Tabla</h3>
+<h3>Posiciones</h3>
+
+<select id="leagueSelect" onchange="loadTable()">
+<option value="128">Liga Profesional</option>
+<option value="130">Copa de la Liga</option>
+<option value="13">Libertadores</option>
+<option value="11">Sudamericana</option>
+</select>
+
 <div id="standings"></div>
 </div>
 
 </div>
 
 <script>
+
 let allNews = [];
+let sportFilter = "all";
 let dark = false;
 
+/* ---------------- DARK MODE ---------------- */
 function toggleDark(){
     dark = !dark;
     document.body.classList.toggle("dark", dark);
     localStorage.setItem("dark", dark);
 }
 
-function setTab(tab){
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-    event.target.classList.add("active");
-
-    document.getElementById("news").style.display = tab==="news"?"block":"none";
-    document.getElementById("table").style.display = tab==="table"?"block":"none";
-
-    if(tab==="table") loadTable();
+/* ---------------- SPORT FILTER ---------------- */
+function setSport(s){
+    sportFilter = s;
+    renderNews();
 }
 
+/* ---------------- LOAD NEWS ---------------- */
 async function loadNews(){
     const res = await fetch("/api/news");
     allNews = await res.json();
 
-    // fill sources
-    const sources = [...new Set(allNews.map(n=>n.source).filter(Boolean))];
+    // populate sources dropdown
+    const sources = [...new Set(allNews.map(n => n.source))];
     const sel = document.getElementById("sourceFilter");
-    sel.innerHTML = `<option value="">Todos</option>` +
-        sources.map(s=>`<option>${s}</option>`).join("");
+
+    sel.innerHTML = `<option value="">Todos los portales</option>` +
+        sources.map(s => `<option value="${s}">${s}</option>`).join("");
 
     renderNews();
 }
 
+/* ---------------- RENDER NEWS ---------------- */
 function renderNews(){
     const search = document.getElementById("search").value.toLowerCase();
     const source = document.getElementById("sourceFilter").value;
 
-    let filtered = allNews.filter(n=>{
-        return (!source || n.source===source) &&
-               (!search || n.title.toLowerCase().includes(search));
-    });
+    let filtered = allNews.filter(n =>
+        (!source || n.source === source) &&
+        (!search || n.title.toLowerCase().includes(search)) &&
+        (sportFilter === "all" || n.sport === sportFilter)
+    );
 
     document.getElementById("news").innerHTML =
-    filtered.map(n=>`
+    filtered.map(n => `
         <div class="card">
             <div class="title">${n.title}</div>
-            <div class="small">${n.source || ""} - ${n.time}</div>
-            <a href="${n.link}" target="_blank">Leer</a>
+            <div class="small">${n.source} - ${n.sport} - ${n.time}</div>
+            <a href="${n.link}" target="_blank">Leer noticia</a>
         </div>
     `).join("");
 }
 
+/* ---------------- TABLE (API FOOTBALL) ---------------- */
 async function loadTable(){
-    const res = await fetch("https://v3.football.api-sports.io/standings?league=128&season=2024", {
-        headers:{
-            "x-apisports-key":"d07a089a76b2c5a4c9f66f80337665ea"
+
+    const league = document.getElementById("leagueSelect").value;
+
+    const res = await fetch(
+        `https://v3.football.api-sports.io/standings?league=${league}&season=2024`,
+        {
+            headers: {
+                "x-apisports-key": 034d49f86772190e8bd3efe1c0a5e29e
+            }
         }
-    });
+    );
 
     const data = await res.json();
-    const t = data.response[0].league.standings[0];
+    const table = data.response[0].league.standings[0];
 
     document.getElementById("standings").innerHTML =
-    `<table border="1" cellpadding="5">
-    ${t.map(r=>`
-        <tr ${r.team.name.includes("Gimnasia")?"style='background:yellow'":""}>
-            <td>${r.rank}</td>
-            <td>${r.team.name}</td>
-            <td>${r.points}</td>
-        </tr>
-    `).join("")}
-    </table>`;
+    table.map(t => `
+        <div ${t.team.name.includes("Gimnasia") ? "style='font-weight:bold;color:yellow'" : ""}>
+            ${t.rank}. ${t.team.name} - ${t.points}
+        </div>
+    `).join("");
 }
 
-// init
-if(localStorage.getItem("dark")==="true") toggleDark();
+/* ---------------- INIT ---------------- */
+if(localStorage.getItem("dark") === "true") toggleDark();
 
 loadNews();
 setInterval(loadNews, 60000);
+
 </script>
 
 </body>
