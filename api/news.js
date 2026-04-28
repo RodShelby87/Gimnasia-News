@@ -1,52 +1,74 @@
 export default async function handler(req, res) {
-  const API_KEY = "034d49f86772190e8bd3efe1c0a5e29e";
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  });
 
-  // BROADER SEARCH (this is the key fix)
-  const url = `https://gnews.io/api/v4/search?q=Gimnasia&lang=es&country=ar&max=50&apikey=${API_KEY}`;
+  const feeds = [
+    {
+      name: "El Día",
+      url: "https://www.eldia.com/rss/deportes.xml",
+    },
+    {
+      name: "Olé",
+      url: "https://www.ole.com.ar/rss/gimnasia-la-plata.xml",
+    },
+    {
+      name: "0221",
+      url: "https://www.0221.com.ar/rss.xml",
+    },
+    {
+      name: "Cielosports",
+      url: "https://www.cielosports.com/rss.xml",
+    },
+  ];
+
+  const parseRSS = async (url) => {
+    const res = await fetch(url);
+    const xml = await res.text();
+
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+
+    return items.map((i) => {
+      const block = i[1];
+
+      const title =
+        (block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) ||
+          block.match(/<title>(.*?)<\/title>/))?.[1] || "";
+
+      const link = (block.match(/<link>(.*?)<\/link>/) || [])[1] || "";
+
+      const pubDate =
+        (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || "";
+
+      const description =
+        (block.match(/<description><!\[CDATA\[(.*?)\]\]><\/description>/) ||
+          block.match(/<description>(.*?)<\/description>/))?.[1] || "";
+
+      return {
+        title,
+        link,
+        description,
+        source: url,
+        time: new Date(pubDate).toISOString(),
+        dateOnly: new Date(pubDate).toLocaleDateString("en-CA", {
+          timeZone: "America/Argentina/Buenos_Aires",
+        }),
+      };
+    });
+  };
 
   try {
-    const response = await fetch(url);
-    const data = await response.json();
+    const all = await Promise.all(feeds.map((f) => parseRSS(f.url)));
 
-    const articles = data.articles || [];
+    const flat = all.flat();
 
-    const keywords = [
-      "gimnasia",
-      "gelp",
-      "lobo",
-      "tripero",
-      "esgrima la plata"
-    ];
-
-    const now = new Date();
-
-    const filtered = articles
-      .map((a) => {
-        const published = new Date(a.publishedAt);
-        const diffHours = (now - published) / (1000 * 60 * 60);
-
-        return {
-          title: a.title,
-          description: a.description,
-          link: a.url,
-          source: a.source?.name || "Unknown",
-          time: a.publishedAt,
-          diffHours,
-          text: (a.title + " " + (a.description || "")).toLowerCase(),
-        };
-      })
-      // filter by relevance (NOT strict name match)
-      .filter((a) =>
-        keywords.some((k) => a.text.includes(k))
-      )
-      // last 72h (more realistic)
-      .filter((a) => a.diffHours <= 72)
+    const filtered = flat
+      .filter((n) => n.title.toLowerCase().includes("gimnasia"))
+      .filter((n) => n.dateOnly === today)
       .sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    return res.status(200).json(filtered);
-  } catch (error) {
-    return res.status(500).json({
-      error: error.message,
-    });
+    res.status(200).json(filtered);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 }
