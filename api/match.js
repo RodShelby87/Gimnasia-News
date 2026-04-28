@@ -1,23 +1,47 @@
 const API_HOST = "https://v3.football.api-sports.io";
 
+// Hardcoded fallback — Gimnasia LP team ID in API-Football
+const FALLBACK_TEAM_ID = 1064;
+
 async function apiFetch(path, apiKey) {
   const resp = await fetch(`${API_HOST}${path}`, {
-    headers: { "x-apisports-key": apiKey },
+    method: "GET",
+    headers: {
+      "x-apisports-key": apiKey,
+    },
   });
   return resp.json();
 }
 
 async function getTeamId(apiKey) {
   if (globalThis._gimnasiaTeamId) return globalThis._gimnasiaTeamId;
-  const data = await apiFetch("/teams?search=Gimnasia&country=Argentina", apiKey);
-  const team = (data.response || []).find(
-    t => t.team && /la\s*plata/i.test(t.team.name)
-  );
-  if (team) {
-    globalThis._gimnasiaTeamId = team.team.id;
-    return team.team.id;
+
+  try {
+    const data = await apiFetch("/teams?search=Gimnasia&country=Argentina", apiKey);
+
+    if (data.response && data.response.length > 0) {
+      // Try to find the La Plata one specifically
+      let team = data.response.find(
+        t => t.team && /la\s*plata/i.test(t.team.name)
+      );
+      // Fallback: any "Gimnasia y Esgrima" from Argentina
+      if (!team) {
+        team = data.response.find(
+          t => t.team && /gimnasia/i.test(t.team.name) && /esgrima/i.test(t.team.name)
+        );
+      }
+      if (team) {
+        globalThis._gimnasiaTeamId = team.team.id;
+        return team.team.id;
+      }
+    }
+  } catch (e) {
+    // Fallback silently
   }
-  return null;
+
+  // Use hardcoded fallback
+  globalThis._gimnasiaTeamId = FALLBACK_TEAM_ID;
+  return FALLBACK_TEAM_ID;
 }
 
 export default async function handler(req, res) {
@@ -26,12 +50,15 @@ export default async function handler(req, res) {
 
   const API_KEY = process.env.FOOTBALL_API_KEY;
   if (!API_KEY) {
-    return res.status(500).json({ error: "FOOTBALL_API_KEY not configured" });
+    return res.status(500).json({
+      error: "FOOTBALL_API_KEY no está configurada en las variables de entorno de Vercel",
+      help: "Andá a Vercel → Settings → Environment Variables y agregá FOOTBALL_API_KEY",
+    });
   }
 
   const now = Date.now();
 
-  // Cache check — TTL varies based on live status
+  // Cache check
   if (
     globalThis._matchCache &&
     now - globalThis._matchCacheTime < (globalThis._matchCacheTTL || 60000)
@@ -41,12 +68,19 @@ export default async function handler(req, res) {
 
   try {
     const teamId = await getTeamId(API_KEY);
-    if (!teamId) {
-      return res.status(200).json({ live: false, fixtures: [], events: [] });
-    }
 
     // 1. Check live fixtures
     const liveData = await apiFetch(`/fixtures?live=all&team=${teamId}`, API_KEY);
+
+    if (liveData.errors && Object.keys(liveData.errors).length > 0) {
+      return res.status(200).json({
+        live: false,
+        fixtures: [],
+        events: [],
+        debug: { teamId, errors: liveData.errors },
+      });
+    }
+
     const liveFixtures = liveData.response || [];
 
     if (liveFixtures.length > 0) {
@@ -91,7 +125,7 @@ export default async function handler(req, res) {
 
       globalThis._matchCache = result;
       globalThis._matchCacheTime = now;
-      globalThis._matchCacheTTL = 60 * 1000; // 60s for live
+      globalThis._matchCacheTTL = 60 * 1000;
       return res.status(200).json(result);
     }
 
@@ -122,14 +156,21 @@ export default async function handler(req, res) {
       },
     }));
 
-    const result = { live: false, fixtures, events: [] };
+    const result = {
+      live: false,
+      fixtures,
+      events: [],
+      debug: { teamId, date: todayStr },
+    };
     globalThis._matchCache = result;
     globalThis._matchCacheTime = now;
-    globalThis._matchCacheTTL = 5 * 60 * 1000; // 5 min
+    globalThis._matchCacheTTL = 5 * 60 * 1000;
     return res.status(200).json(result);
   } catch (err) {
-    return res
-      .status(500)
-      .json({ error: "Error al obtener partido", details: err.message });
+    return res.status(500).json({
+      error: "Error al obtener partido",
+      details: err.message,
+      stack: err.stack,
+    });
   }
 }
