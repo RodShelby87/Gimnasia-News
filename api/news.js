@@ -4,7 +4,10 @@ export default async function handler(req, res) {
 
   const API_KEY = process.env.GNEWS_API_KEY;
   if (!API_KEY) {
-    return res.status(500).json({ error: "GNEWS_API_KEY not configured" });
+    return res.status(500).json({
+      error: "GNEWS_API_KEY no está configurada en las variables de entorno de Vercel",
+      help: "Andá a Vercel → Settings → Environment Variables y agregá GNEWS_API_KEY",
+    });
   }
 
   // ── In-memory cache (15 min) ──
@@ -13,11 +16,14 @@ export default async function handler(req, res) {
     return res.status(200).json(globalThis._newsCache);
   }
 
-  // ── Argentina "today" boundaries (UTC-3) ──
+  // ── Argentina "today" (UTC-3) ──
   const argNow = new Date(
     new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })
   );
-  const todayStr = argNow.toLocaleDateString("en-CA");
+  const todayStr = argNow.toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+  // Use "from" param to ask GNews for today's articles only (saves quota)
+  const fromISO = todayStr + "T00:00:00Z";
 
   // ── Sport keyword map ──
   const SPORT_KW = {
@@ -36,7 +42,8 @@ export default async function handler(req, res) {
       "gol","partido","torneo","liga profesional",
       "copa argentina","afa","plantel","dt","técnico","refuerzo",
       "fichaje","pase","transferencia","primera división",
-      "superliga","fecha","arbitro","penal","offside","director técnico"
+      "superliga","fecha","arbitro","penal","offside","director técnico",
+      "campeonato","eliminatoria"
     ];
     if (futbolKw.some(k => t.includes(k))) return "futbol";
     const clubKw = [
@@ -52,10 +59,28 @@ export default async function handler(req, res) {
       `https://gnews.io/api/v4/search` +
       `?q=Gimnasia+La+Plata` +
       `&lang=es&country=ar&max=10&sortby=publishedAt` +
-      `&token=${API_KEY}`;
+      `&from=${fromISO}` +
+      `&apikey=${API_KEY}`;
 
-    const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const resp = await fetch(url);
+
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      return res.status(resp.status).json({
+        error: "GNews API respondió con error",
+        status: resp.status,
+        details: errorText,
+      });
+    }
+
     const data = await resp.json();
+
+    if (data.errors && data.errors.length > 0) {
+      return res.status(400).json({
+        error: "GNews API devolvió errores",
+        details: data.errors,
+      });
+    }
 
     if (!data.articles) {
       return res.status(200).json([]);
@@ -87,6 +112,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json(articles);
   } catch (err) {
-    return res.status(500).json({ error: "Error al obtener noticias", details: err.message });
+    return res.status(500).json({
+      error: "Error al obtener noticias",
+      details: err.message,
+      stack: err.stack,
+    });
   }
 }
