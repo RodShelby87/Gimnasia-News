@@ -2,86 +2,202 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>GELP News</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GELP Hub</title>
 
 <style>
 body {
+    margin:0;
     font-family: Arial;
-    margin: 0;
     background: #f4f6f9;
+    color: #111;
+}
+
+.dark {
+    background:#0f172a;
+    color:#fff;
 }
 
 header {
-    background: #002d5a;
-    color: white;
-    padding: 15px;
-    text-align: center;
-    font-size: 20px;
-    font-weight: bold;
+    background:#002d5a;
+    color:white;
+    padding:15px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+button {
+    margin-left:8px;
+    padding:8px;
+    cursor:pointer;
 }
 
 .container {
-    max-width: 900px;
-    margin: auto;
-    padding: 20px;
+    max-width:1000px;
+    margin:auto;
+    padding:20px;
 }
 
 .card {
-    background: white;
-    padding: 15px;
-    margin-bottom: 15px;
-    border-left: 5px solid #002d5a;
-    border-radius: 8px;
+    background:white;
+    padding:15px;
+    margin:10px 0;
+    border-left:5px solid #002d5a;
+    border-radius:8px;
 }
 
-.title {
-    font-weight: bold;
-    margin-bottom: 8px;
+.dark .card {
+    background:#1e293b;
 }
 
-.time {
-    font-size: 12px;
-    color: gray;
+.title { font-weight:bold; }
+.small { font-size:12px; opacity:0.7; }
+
+.topbar {
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:15px;
 }
 
-a {
-    text-decoration: none;
-    color: #002d5a;
-    font-weight: bold;
+input, select {
+    padding:8px;
+}
+.tabs {
+    display:flex;
+    gap:10px;
+    margin:10px 0;
+}
+.tab {
+    padding:8px 12px;
+    background:#ddd;
+    cursor:pointer;
+    border-radius:20px;
+}
+.tab.active {
+    background:#002d5a;
+    color:white;
+}
+
+.dark .tab {
+    background:#334155;
 }
 </style>
 </head>
 
 <body>
 
-<header>Gimnasia y Esgrima La Plata - Noticias</header>
+<header>
+<div>GELP HUB</div>
+<div>
+<button onclick="toggleDark()">🌙</button>
+<button onclick="loadNews()">🔄</button>
+</div>
+</header>
 
-<div class="container" id="news">
-    Cargando noticias...
+<div class="container">
+
+<div class="tabs">
+<div class="tab active" onclick="setTab('news')">Noticias</div>
+<div class="tab" onclick="setTab('table')">Posiciones</div>
+</div>
+
+<div class="topbar">
+<input id="search" placeholder="Buscar..." oninput="renderNews()">
+<select id="sourceFilter" onchange="renderNews()">
+<option value="">Todos los portales</option>
+</select>
+</div>
+
+<div id="news"></div>
+
+<div id="table" style="display:none">
+<h3>Tabla</h3>
+<div id="standings"></div>
+</div>
+
 </div>
 
 <script>
-async function loadNews() {
+let allNews = [];
+let dark = false;
+
+function toggleDark(){
+    dark = !dark;
+    document.body.classList.toggle("dark", dark);
+    localStorage.setItem("dark", dark);
+}
+
+function setTab(tab){
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    event.target.classList.add("active");
+
+    document.getElementById("news").style.display = tab==="news"?"block":"none";
+    document.getElementById("table").style.display = tab==="table"?"block":"none";
+
+    if(tab==="table") loadTable();
+}
+
+async function loadNews(){
     const res = await fetch("/api/news");
-    const data = await res.json();
+    allNews = await res.json();
 
-    const container = document.getElementById("news");
+    // fill sources
+    const sources = [...new Set(allNews.map(n=>n.source).filter(Boolean))];
+    const sel = document.getElementById("sourceFilter");
+    sel.innerHTML = `<option value="">Todos</option>` +
+        sources.map(s=>`<option>${s}</option>`).join("");
 
-    if (!data.length) {
-        container.innerHTML = "<p>No hay noticias hoy.</p>";
-        return;
-    }
+    renderNews();
+}
 
-    container.innerHTML = data.map(n => `
+function renderNews(){
+    const search = document.getElementById("search").value.toLowerCase();
+    const source = document.getElementById("sourceFilter").value;
+
+    let filtered = allNews.filter(n=>{
+        return (!source || n.source===source) &&
+               (!search || n.title.toLowerCase().includes(search));
+    });
+
+    document.getElementById("news").innerHTML =
+    filtered.map(n=>`
         <div class="card">
             <div class="title">${n.title}</div>
-            <div class="time">${n.time}</div>
-            <a href="${n.link}" target="_blank">Leer noticia</a>
+            <div class="small">${n.source || ""} - ${n.time}</div>
+            <a href="${n.link}" target="_blank">Leer</a>
         </div>
     `).join("");
 }
 
+async function loadTable(){
+    const res = await fetch("https://v3.football.api-sports.io/standings?league=128&season=2024", {
+        headers:{
+            "x-apisports-key":"YOUR_KEY"
+        }
+    });
+
+    const data = await res.json();
+    const t = data.response[0].league.standings[0];
+
+    document.getElementById("standings").innerHTML =
+    `<table border="1" cellpadding="5">
+    ${t.map(r=>`
+        <tr ${r.team.name.includes("Gimnasia")?"style='background:yellow'":""}>
+            <td>${r.rank}</td>
+            <td>${r.team.name}</td>
+            <td>${r.points}</td>
+        </tr>
+    `).join("")}
+    </table>`;
+}
+
+// init
+if(localStorage.getItem("dark")==="true") toggleDark();
+
 loadNews();
+setInterval(loadNews, 60000);
 </script>
 
 </body>
