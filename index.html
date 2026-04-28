@@ -1,188 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Gimnasia News</title>
-  <style>
-    :root {
-      --bg: #ffffff;
-      --text: #111111;
-      --card: #f4f4f4;
-      --accent: #00a6ff;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Gimnasia News</title>
 
-    body.dark {
-      --bg: #0f0f10;
-      --text: #f5f5f5;
-      --card: #1c1c1e;
-    }
+<style>
+:root {
+  --bg: #ffffff;
+  --text: #111;
+  --card: #f3f3f3;
+  --accent: #1f6feb;
+}
 
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      transition: all 0.3s ease;
-    }
+body.dark {
+  --bg: #0f0f0f;
+  --text: #f5f5f5;
+  --card: #1c1c1c;
+  --accent: #4ea1ff;
+}
 
-    header {
-      padding: 14px 16px;
-      background: var(--accent);
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  transition: 0.3s;
+}
 
-    h1 {
-      margin: 0;
-      font-size: 18px;
-    }
+header {
+  padding: 15px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
 
-    .controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
+h1 {
+  font-size: 20px;
+  margin: 0;
+}
 
-    input {
-      padding: 6px;
-      border-radius: 6px;
-      border: none;
-      outline: none;
-    }
+input {
+  padding: 8px;
+  width: 200px;
+}
 
-    .theme-btn {
-      background: white;
-      color: #111;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 20px;
-      cursor: pointer;
-      font-weight: bold;
-    }
+button {
+  padding: 8px 10px;
+  cursor: pointer;
+}
 
-    body.dark .theme-btn {
-      background: #222;
-      color: #fff;
-    }
+.container {
+  padding: 15px;
+}
 
-    .container {
-      padding: 16px;
-      display: grid;
-      gap: 12px;
-    }
+.card {
+  background: var(--card);
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+}
 
-    .card {
-      background: var(--card);
-      padding: 12px;
-      border-radius: 10px;
-      border-left: 4px solid var(--accent);
-    }
+.title {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
 
-    .title {
-      font-weight: bold;
-      color: var(--accent);
-      text-decoration: none;
-      display: block;
-      margin-bottom: 6px;
-    }
+.summary {
+  font-size: 13px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
 
-    .meta {
-      font-size: 12px;
-      opacity: 0.7;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-bottom: 6px;
-    }
-
-    .summary {
-      font-size: 13px;
-      opacity: 0.9;
-    }
-  </style>
+.portal {
+  font-size: 12px;
+  color: var(--accent);
+}
+</style>
 </head>
-<body>
 
+<body>
 <header>
   <h1>Gimnasia News</h1>
-  <div class="controls">
-    <input id="search" placeholder="Search news..." oninput="filterNews()" />
-    <button class="theme-btn" onclick="toggleTheme()">🌙 / ☀️</button>
-  </div>
+
+  <input id="search" placeholder="Search news..." />
+
+  <button onclick="toggleMode()">🌓</button>
 </header>
 
 <div class="container" id="news"></div>
 
 <script>
-const TEAM_COLOR = "#00a6ff";
+const API = "https://gimnasia-news-zwn3.vercel.app/api/news";
+
 let allNews = [];
 
-// load saved theme preference
-if (localStorage.getItem("theme") === "dark") {
-  document.body.classList.add("dark");
-}
-
-async function fetchNews() {
+function getDomain(url) {
   try {
-    const res = await fetch("/api/news");
-    const data = await res.json();
-    allNews = data;
-    renderNews(allNews);
-  } catch (e) {
-    document.getElementById("news").innerHTML = "Error loading news.";
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return "Unknown";
   }
 }
 
-function getPortal(item) {
-  return item.source || item.sport || "Gimnasia";
+function makeSummary(title) {
+  return title.length > 120 ? title.substring(0, 120) + "..." : title;
 }
 
-function renderNews(news) {
+function render(data) {
   const container = document.getElementById("news");
   container.innerHTML = "";
 
-  news.forEach(item => {
-    const div = document.createElement("div");
-    div.className = "card";
+  data.forEach(item => {
+    const portal = getDomain(item.link);
 
-    div.innerHTML = `
-      <a class="title" href="${item.link}" target="_blank">${item.title}</a>
-      <div class="meta">
-        <span>${getPortal(item)}</span>
-      </div>
+    const card = document.createElement("div");
+    card.className = "card";
+
+    card.innerHTML = `
+      <div class="title">${item.title}</div>
+      <div class="summary">${makeSummary(item.title)}</div>
+      <div class="portal">${portal}</div>
     `;
 
-    container.appendChild(div);
+    container.appendChild(card);
   });
 }
 
-function filterNews() {
-  const value = document.getElementById("search").value.toLowerCase();
+async function loadNews() {
+  const res = await fetch(API);
+  const data = await res.json();
+
+  // remove Google News noise
+  allNews = data.filter(n => n.link);
+
+  render(allNews);
+}
+
+document.getElementById("search").addEventListener("input", e => {
+  const val = e.target.value.toLowerCase();
+
   const filtered = allNews.filter(n =>
-    n.title.toLowerCase().includes(value)
+    n.title.toLowerCase().includes(val)
   );
-  renderNews(filtered);
-}
 
-function toggleTheme() {
+  render(filtered);
+});
+
+function toggleMode() {
   document.body.classList.toggle("dark");
-
-  if (document.body.classList.contains("dark")) {
-    localStorage.setItem("theme", "dark");
-  } else {
-    localStorage.setItem("theme", "light");
-  }
+  localStorage.setItem("mode", document.body.classList.contains("dark") ? "dark" : "light");
 }
 
-document.documentElement.style.setProperty("--accent", TEAM_COLOR);
+(function initMode() {
+  const mode = localStorage.getItem("mode");
+  if (mode === "dark") document.body.classList.add("dark");
+})();
 
-fetchNews();
+loadNews();
 </script>
 
 </body>
