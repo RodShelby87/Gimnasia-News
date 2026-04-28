@@ -5,14 +5,14 @@ export default async function handler(req, res) {
   const API_KEY = process.env.GNEWS_API_KEY;
   if (!API_KEY) {
     return res.status(500).json({
-      error: "GNEWS_API_KEY no está configurada en las variables de entorno de Vercel",
-      help: "Andá a Vercel → Settings → Environment Variables y agregá GNEWS_API_KEY",
+      error: "GNEWS_API_KEY no está configurada",
     });
   }
 
-  // ── In-memory cache (15 min) ──
+  // ── In-memory cache (15 min) — skip cache if ?debug=1 ──
   const now = Date.now();
-  if (globalThis._newsCache && now - globalThis._newsCacheTime < 15 * 60 * 1000) {
+  const debugMode = req.query && req.query.debug === "1";
+  if (!debugMode && globalThis._newsCache && now - globalThis._newsCacheTime < 15 * 60 * 1000) {
     return res.status(200).json(globalThis._newsCache);
   }
 
@@ -20,16 +20,13 @@ export default async function handler(req, res) {
   const argNow = new Date(
     new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })
   );
-  const todayStr = argNow.toLocaleDateString("en-CA"); // YYYY-MM-DD
-
-  // Use "from" param to ask GNews for today's articles only (saves quota)
-  const fromISO = todayStr + "T00:00:00Z";
+  const todayStr = argNow.toLocaleDateString("en-CA");
 
   // ── Sport keyword map ──
   const SPORT_KW = {
-    basquet: ["básquet", "basquet", "basketball", "liga nacional de básquet", "triple", "tablero", "cancha de basquet"],
-    voley:   ["vóley", "voley", "volleyball", "lobas", "set point", "remate de voley"],
-    hockey:  ["hockey", "césped", "palo de hockey", "bocha"],
+    basquet: ["básquet", "basquet", "basketball", "liga nacional de básquet", "triple", "tablero"],
+    voley:   ["vóley", "voley", "volleyball", "lobas", "set point"],
+    hockey:  ["hockey", "césped", "bocha"],
     esgrima: ["esgrima", "fencing", "sable", "florete", "espada"],
   };
 
@@ -62,54 +59,85 @@ export default async function handler(req, res) {
       `&apikey=${API_KEY}`;
 
     const resp = await fetch(url);
+    const rawText = await resp.text();
+
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      return res.status(500).json({
+        error: "GNews no devolvió JSON válido",
+        rawResponse: rawText.substring(0, 500),
+      });
+    }
 
     if (!resp.ok) {
-      const errorText = await resp.text();
       return res.status(resp.status).json({
-        error: "GNews API respondió con error",
+        error: "GNews API error",
         status: resp.status,
-        details: errorText,
+        details: data,
       });
     }
 
-    const data = await resp.json();
-
-    if (data.errors && data.errors.length > 0) {
-      return res.status(400).json({
-        error: "GNews API devolvió errores",
-        details: data.errors,
+    if (!data.articles || data.articles.length === 0) {
+      return res.status(200).json({
+        articles: [],
+        debug: {
+          message: "GNews no devolvió artículos",
+          totalArticles: data.totalArticles || 0,
+          gnewsResponse: data,
+          queryUsed: "Gimnasia+La+Plata",
+          todayFilter: todayStr,
+        },
       });
     }
 
-    if (!data.articles) {
-      return res.status(200).json([]);
-    }
+    const allMapped = data.articles.map(a => {
+      const pubArg = new Date(
+        new Date(a.publishedAt).toLocaleString("en-US", {
+          timeZone: "America/Argentina/Buenos_Aires",
+        })
+      );
+      return {
+        title:       a.title,
+        description: a.description || "",
+        url:         a.url,
+        image:       a.image || null,
+        publishedAt: a.publishedAt,
+        dateOnly:    pubArg.toLocaleDateString("en-CA"),
+        source:      (a.source && a.source.name) || "Desconocido",
+        sport:       detectSport((a.title || "") + " " + (a.description || "")),
+      };
+    });
 
-    const articles = data.articles
-      .map(a => {
-        const pubArg = new Date(
-          new Date(a.publishedAt).toLocaleString("en-US", {
-            timeZone: "America/Argentina/Buenos_Aires",
-          })
-        );
-        return {
-          title:       a.title,
-          description: a.description || "",
-          url:         a.url,
-          image:       a.image || null,
-          publishedAt: a.publishedAt,
-          dateOnly:    pubArg.toLocaleDateString("en-CA"),
-          source:      (a.source && a.source.name) || "Desconocido",
-          sport:       detectSport((a.title || "") + " " + (a.description || "")),
-        };
-      })
+    const filtered = allMapped
       .filter(a => a.dateOnly === todayStr)
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
-    globalThis._newsCache = articles;
+    // If no articles pass the date filter, show debug info
+    if (filtered.length === 0 && debugMode) {
+      return res.status(200).json({
+        articles: [],
+        debug: {
+          message: "GNews devolvió artículos pero ninguno es de hoy",
+          todayFilter: todayStr,
+          articlesReceived: allMapped.map(a => ({
+            title: a.title,
+            dateOnly: a.dateOnly,
+            publishedAt: a.publishedAt,
+          })),
+        },
+      });
+    }
+
+    if (filtered.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    globalThis._newsCache = filtered;
     globalThis._newsCacheTime = now;
 
-    return res.status(200).json(articles);
+    return res.status(200).json(filtered);
   } catch (err) {
     return res.status(500).json({
       error: "Error al obtener noticias",
