@@ -1,73 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sports Dashboard</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    button { margin: 5px; }
+    .tab { margin-top: 20px; }
+  </style>
+</head>
+
+<body>
+
+<h1>Sports Dashboard</h1>
+
+<!-- TABS -->
+<button onclick="showTab('news')">News</button>
+<button onclick="showTab('standings')">Standings</button>
+
+<hr />
+
+<!-- SPORT FILTER -->
+<div id="sportTabs"></div>
+
+<hr />
+
+<!-- NEWS -->
+<div id="newsTab" class="tab">
+  <h2>News</h2>
+  <div id="news"></div>
+</div>
+
+<!-- STANDINGS -->
+<div id="standingsTab" class="tab" style="display:none">
+  <h2>Standings</h2>
+
+  <select id="tournament" onchange="loadStandings()">
+    <option value="all">All tournaments</option>
+    <option value="liga">Liga</option>
+    <option value="cup">Cup</option>
+  </select>
+
+  <div id="standings"></div>
+</div>
+
 <script>
 let allNews = [];
 let currentSport = "all";
 let currentTab = "news";
 
-// DOM elements (adjust IDs if needed)
-const newsContainer = document.getElementById("news");
-const sportTabs = document.getElementById("sportTabs");
-const standingsContainer = document.getElementById("standings");
-const tournamentSelect = document.getElementById("tournament");
+// DOM
+const newsEl = document.getElementById("news");
+const sportTabsEl = document.getElementById("sportTabs");
+const standingsEl = document.getElementById("standings");
 
-// 1. LOAD NEWS
+// ------------------- LOAD NEWS -------------------
 async function loadNews() {
-  const res = await fetch("/api/news");
-  allNews = await res.json();
+  try {
+    const res = await fetch("/api/news");
+    allNews = await res.json();
 
-  renderSports();
-  renderNews();
+    renderSports();
+    renderNews();
+  } catch (err) {
+    console.error("News error:", err);
+    newsEl.innerHTML = "Failed to load news";
+  }
 }
 
-// 2. RENDER SPORT TABS (FIXES “ONLY ALL” PROBLEM)
+// ------------------- SPORTS TABS -------------------
 function renderSports() {
   const sports = ["all", ...new Set(allNews.map(n => n.sport))];
 
-  sportTabs.innerHTML = "";
+  sportTabsEl.innerHTML = "";
 
   sports.forEach(s => {
     const btn = document.createElement("button");
-    btn.innerText = s;
+    btn.textContent = s;
 
     btn.onclick = () => {
       currentSport = s;
       renderNews();
     };
 
-    sportTabs.appendChild(btn);
+    sportTabsEl.appendChild(btn);
   });
 }
 
-// 3. FILTER NEWS
+// ------------------- NEWS -------------------
 function renderNews() {
   const filtered =
     currentSport === "all"
       ? allNews
       : allNews.filter(n => n.sport === currentSport);
 
-  newsContainer.innerHTML = filtered.map(n => `
-    <div>
-      <a href="${n.link}" target="_blank">${n.title}</a>
-      <p>${n.dateOnly}</p>
+  if (!filtered.length) {
+    newsEl.innerHTML = "No news found";
+    return;
+  }
+
+  newsEl.innerHTML = filtered.map(n => `
+    <div style="margin-bottom:10px">
+      <a href="${n.link}" target="_blank">${n.title}</a><br/>
+      <small>${n.dateOnly || ""}</small>
     </div>
   `).join("");
 }
 
-// 4. LOAD STANDINGS (ONLY WHEN TAB IS OPEN)
+// ------------------- STANDINGS -------------------
 async function loadStandings() {
-  const sport = currentSport;
-  const tournament = tournamentSelect?.value || "all";
+  try {
+    const tournament = document.getElementById("tournament").value;
 
-  const res = await fetch(`/api/standings?sport=${sport}&tournament=${tournament}`);
-  const data = await res.json();
+    const res = await fetch(`/api/standings?sport=${currentSport}&tournament=${tournament}`);
+    const data = await res.json();
 
-  standingsContainer.innerHTML = data.map(t => `
-    <div>
-      <strong>${t.name}</strong> - ${t.points} pts
-    </div>
-  `).join("");
+    if (!data.length) {
+      standingsEl.innerHTML = "No standings data";
+      return;
+    }
+
+    standingsEl.innerHTML = `
+      <table border="1" cellpadding="6">
+        <tr>
+          <th>Team</th>
+          <th>Points</th>
+          <th>Played</th>
+        </tr>
+        ${data.map(t => `
+          <tr>
+            <td>${t.name}</td>
+            <td>${t.points}</td>
+            <td>${t.played}</td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+  } catch (err) {
+    console.error("Standings error:", err);
+    standingsEl.innerHTML = "Failed to load standings";
+  }
 }
 
-// 5. TAB SWITCH
+// ------------------- TABS -------------------
 function showTab(tab) {
   currentTab = tab;
 
@@ -82,3 +157,6 @@ function showTab(tab) {
 // INIT
 loadNews();
 </script>
+
+</body>
+</html>
