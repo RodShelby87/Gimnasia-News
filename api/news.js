@@ -1,106 +1,92 @@
 export default async function handler(req, res) {
-  const rssUrl =
-    "https://news.google.com/rss/search?q=Gimnasia+La+Plata&hl=es-419&gl=AR&ceid=AR:es-419";
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET");
 
-  const today = new Date().toLocaleDateString("en-CA", {
-    timeZone: "America/Argentina/Buenos_Aires",
-  });
+  const API_KEY = process.env.GNEWS_API_KEY;
+  if (!API_KEY) {
+    return res.status(500).json({ error: "GNEWS_API_KEY not configured" });
+  }
 
-  const SPORT_KEYWORDS = {
-    futbol: [
-      "gimnasia",
-      "gelp",
-      "lobo",
-      "tripero",
-      "afa",
-      "torneo",
-      "partido",
-      "gol",
-      "plantel",
-      "dt"
-    ],
-    basquet: [
-      "básquet",
-      "basquet",
-      "liga nacional",
-      "triple",
-      "tablero"
-    ],
-    voley: [
-      "vóley",
-      "voley",
-      "lobas",
-      "set",
-      "remate"
-    ]
+  // ── In-memory cache (15 min) ──
+  const now = Date.now();
+  if (globalThis._newsCache && now - globalThis._newsCacheTime < 15 * 60 * 1000) {
+    return res.status(200).json(globalThis._newsCache);
+  }
+
+  // ── Argentina "today" boundaries (UTC-3) ──
+  const argNow = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })
+  );
+  const todayStr = argNow.toLocaleDateString("en-CA");
+
+  // ── Sport keyword map ──
+  const SPORT_KW = {
+    basquet: ["básquet", "basquet", "basketball", "liga nacional de básquet", "triple", "tablero", "cancha de basquet"],
+    voley:   ["vóley", "voley", "volleyball", "lobas", "set point", "remate de voley"],
+    hockey:  ["hockey", "césped", "palo de hockey", "bocha"],
+    esgrima: ["esgrima", "fencing", "sable", "florete", "espada"],
   };
 
   function detectSport(text) {
-    const t = text.toLowerCase();
-
-    if (SPORT_KEYWORDS.basquet.some(k => t.includes(k))) return "basquet";
-    if (SPORT_KEYWORDS.voley.some(k => t.includes(k))) return "voley";
+    const t = (text || "").toLowerCase();
+    for (const [sport, kws] of Object.entries(SPORT_KW)) {
+      if (kws.some(k => t.includes(k))) return sport;
+    }
+    const futbolKw = [
+      "gol","partido","torneo","liga profesional",
+      "copa argentina","afa","plantel","dt","técnico","refuerzo",
+      "fichaje","pase","transferencia","primera división",
+      "superliga","fecha","arbitro","penal","offside","director técnico"
+    ];
+    if (futbolKw.some(k => t.includes(k))) return "futbol";
+    const clubKw = [
+      "socios","elecciones","presidente","institución",
+      "aniversario","sede","asamblea","balance","cuota","estatuto"
+    ];
+    if (clubKw.some(k => t.includes(k))) return "club";
     return "futbol";
   }
 
-  function extractSource(link) {
-    if (!link) return "Google News";
-
-    const match = link.match(
-      /(ole|eldia|infocielo|0221|cielosports|diariohoy|laplata1|lavoz|elgrafico)/i
-    );
-
-    return match ? match[1] : "Google News";
-  }
-
   try {
-    const response = await fetch(rssUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
-    });
+    const url =
+      `https://gnews.io/api/v4/search` +
+      `?q=Gimnasia+La+Plata` +
+      `&lang=es&country=ar&max=10&sortby=publishedAt` +
+      `&token=${API_KEY}`;
 
-    const xml = await response.text();
+    const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const data = await resp.json();
 
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+    if (!data.articles) {
+      return res.status(200).json([]);
+    }
 
-    const news = items.map(i => {
-      const block = i[1];
+    const articles = data.articles
+      .map(a => {
+        const pubArg = new Date(
+          new Date(a.publishedAt).toLocaleString("en-US", {
+            timeZone: "America/Argentina/Buenos_Aires",
+          })
+        );
+        return {
+          title:       a.title,
+          description: a.description || "",
+          url:         a.url,
+          image:       a.image || null,
+          publishedAt: a.publishedAt,
+          dateOnly:    pubArg.toLocaleDateString("en-CA"),
+          source:      (a.source && a.source.name) || "Desconocido",
+          sport:       detectSport((a.title || "") + " " + (a.description || "")),
+        };
+      })
+      .filter(a => a.dateOnly === todayStr)
+      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
-      const title =
-        (block.match(/<title>(.*?)<\/title>/) || [])[1] || "";
+    globalThis._newsCache = articles;
+    globalThis._newsCacheTime = now;
 
-      const link =
-        (block.match(/<link>(.*?)<\/link>/) || [])[1] || "";
-
-      const pubDate =
-        (block.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || "";
-
-      const dateOnly = new Date(pubDate).toLocaleDateString("en-CA", {
-        timeZone: "America/Argentina/Buenos_Aires",
-      });
-
-      return {
-        title,
-        link,
-        time: pubDate,
-        dateOnly,
-        source: extractSource(link),
-        sport: detectSport(title)
-      };
-    });
-
-    // FILTER: only today (Argentina time)
-    const filtered = news
-      .filter(n => n.dateOnly === today)
-      .sort((a, b) => new Date(b.time) - new Date(a.time));
-
-    res.status(200).json(filtered);
-
-  } catch (error) {
-    res.status(500).json({
-      error: "Failed to fetch news",
-      details: error.message
-    });
+    return res.status(200).json(articles);
+  } catch (err) {
+    return res.status(500).json({ error: "Error al obtener noticias", details: err.message });
   }
 }
