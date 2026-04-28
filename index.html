@@ -123,6 +123,11 @@
 const TEAM_COLOR = "#00a6ff";
 let allNews = [];
 
+// load saved theme preference
+if (localStorage.getItem("theme") === "dark") {
+  document.body.classList.add("dark");
+}
+
 async function fetchNews() {
   try {
     const res = await fetch("/api/news");
@@ -138,10 +143,6 @@ function getPortal(item) {
   return item.source || item.sport || "Gimnasia";
 }
 
-function getSummary(title) {
-  return title.length > 120 ? title.slice(0, 120) + "..." : title;
-}
-
 function renderNews(news) {
   const container = document.getElementById("news");
   container.innerHTML = "";
@@ -155,7 +156,6 @@ function renderNews(news) {
       <div class="meta">
         <span>${getPortal(item)}</span>
       </div>
-      <div class="summary">${getSummary(item.title)}</div>
     `;
 
     container.appendChild(div);
@@ -172,6 +172,12 @@ function filterNews() {
 
 function toggleTheme() {
   document.body.classList.toggle("dark");
+
+  if (document.body.classList.contains("dark")) {
+    localStorage.setItem("theme", "dark");
+  } else {
+    localStorage.setItem("theme", "light");
+  }
 }
 
 document.documentElement.style.setProperty("--accent", TEAM_COLOR);
