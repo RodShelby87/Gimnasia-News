@@ -6,15 +6,11 @@ export default async function handler(req, res) {
     timeZone: "America/Argentina/Buenos_Aires",
   });
 
-  const KEYWORDS = [
-    "gimnasia",
-    "gelp",
-    "tripero",
-    "bosque",
-    "mens sana",
-    "lobo",
-    "la plata"
-  ];
+  const SPORT_KEYWORDS = {
+    futbol: ["gimnasia", "lobo", "tripero", "afa", "partido", "gol"],
+    basquet: ["basquet", "básquet", "liga nacional"],
+    voley: ["voley", "vóley", "lobas"]
+  };
 
   try {
     const response = await fetch(rssUrl);
@@ -22,7 +18,7 @@ export default async function handler(req, res) {
 
     const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
 
-    const news = items.map((i) => {
+    const news = items.map(i => {
       const block = i[1];
 
       const title = (block.match(/<title>(.*?)<\/title>/) || [])[1] || "";
@@ -33,22 +29,31 @@ export default async function handler(req, res) {
         timeZone: "America/Argentina/Buenos_Aires",
       });
 
+      // fake but useful source extraction (Google News link contains publisher)
+      let source = "Google News";
+      const match = link.match(/(infocielo|eldia|ole|0221|cielosports|diariohoy)/i);
+      if (match) source = match[1];
+
+      // sport classification
+      let sport = "futbol";
+      const text = title.toLowerCase();
+
+      if (SPORT_KEYWORDS.basquet.some(k => text.includes(k))) sport = "basquet";
+      if (SPORT_KEYWORDS.voley.some(k => text.includes(k))) sport = "voley";
+
       return {
         title,
         link,
         time: pubDate,
-        dateOnly
+        dateOnly,
+        source,
+        sport
       };
     });
 
     const filtered = news
       .filter(n => n.dateOnly === today)
-      .filter(n =>
-        KEYWORDS.some(k =>
-          n.title.toLowerCase().includes(k)
-        )
-      )
-      .sort((a, b) => new Date(b.time) - new Date(a.time));
+      .sort((a,b)=>new Date(b.time)-new Date(a.time));
 
     res.status(200).json(filtered);
   } catch (e) {
