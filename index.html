@@ -1,226 +1,84 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GELP Hub</title>
-
-<style>
-body {
-    margin:0;
-    font-family: Arial;
-    background:#f4f6f9;
-    color:#111;
-}
-
-.dark {
-    background:#0f172a;
-    color:#fff;
-}
-
-header {
-    background:#002d5a;
-    color:white;
-    padding:15px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-}
-
-button {
-    margin-left:6px;
-    padding:8px;
-    cursor:pointer;
-}
-
-.container {
-    max-width:1000px;
-    margin:auto;
-    padding:20px;
-}
-
-.tabs {
-    display:flex;
-    gap:10px;
-    margin:10px 0;
-    flex-wrap:wrap;
-}
-
-.tab {
-    padding:8px 12px;
-    background:#ddd;
-    border-radius:20px;
-    cursor:pointer;
-}
-
-.tab.active {
-    background:#002d5a;
-    color:white;
-}
-
-.card {
-    background:white;
-    padding:15px;
-    margin:10px 0;
-    border-left:5px solid #002d5a;
-    border-radius:8px;
-}
-
-.dark .card {
-    background:#1e293b;
-}
-
-.title { font-weight:bold; }
-.small { font-size:12px; opacity:0.7; }
-
-.topbar {
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    margin-bottom:15px;
-}
-
-input, select {
-    padding:8px;
-}
-</style>
-</head>
-
-<body>
-
-<header>
-<div>GELP HUB</div>
-<div>
-<button onclick="toggleDark()">🌙</button>
-<button onclick="loadNews()">🔄</button>
-</div>
-</header>
-
-<div class="container">
-
-<!-- SPORT TABS -->
-<div class="tabs">
-<div class="tab active" onclick="setSport('all')">Todo</div>
-<div class="tab" onclick="setSport('futbol')">Fútbol</div>
-<div class="tab" onclick="setSport('basquet')">Básquet</div>
-<div class="tab" onclick="setSport('voley')">Vóley</div>
-</div>
-
-<!-- FILTERS -->
-<div class="topbar">
-<input id="search" placeholder="Buscar..." oninput="renderNews()">
-
-<select id="sourceFilter" onchange="renderNews()">
-<option value="">Todos los portales</option>
-</select>
-</div>
-
-<!-- NEWS -->
-<div id="news"></div>
-
-<!-- TABLE -->
-<div id="table" style="display:none">
-<h3>Posiciones</h3>
-
-<select id="leagueSelect" onchange="loadTable()">
-<option value="128">Liga Profesional</option>
-<option value="130">Copa de la Liga</option>
-<option value="13">Libertadores</option>
-<option value="11">Sudamericana</option>
-</select>
-
-<div id="standings"></div>
-</div>
-
-</div>
-
 <script>
-
 let allNews = [];
-let sportFilter = "all";
-let dark = false;
+let currentSport = "all";
+let currentTab = "news";
 
-/* ---------------- DARK MODE ---------------- */
-function toggleDark(){
-    dark = !dark;
-    document.body.classList.toggle("dark", dark);
-    localStorage.setItem("dark", dark);
+// DOM elements (adjust IDs if needed)
+const newsContainer = document.getElementById("news");
+const sportTabs = document.getElementById("sportTabs");
+const standingsContainer = document.getElementById("standings");
+const tournamentSelect = document.getElementById("tournament");
+
+// 1. LOAD NEWS
+async function loadNews() {
+  const res = await fetch("/api/news");
+  allNews = await res.json();
+
+  renderSports();
+  renderNews();
 }
 
-/* ---------------- SPORT FILTER ---------------- */
-function setSport(s){
-    sportFilter = s;
-    renderNews();
+// 2. RENDER SPORT TABS (FIXES “ONLY ALL” PROBLEM)
+function renderSports() {
+  const sports = ["all", ...new Set(allNews.map(n => n.sport))];
+
+  sportTabs.innerHTML = "";
+
+  sports.forEach(s => {
+    const btn = document.createElement("button");
+    btn.innerText = s;
+
+    btn.onclick = () => {
+      currentSport = s;
+      renderNews();
+    };
+
+    sportTabs.appendChild(btn);
+  });
 }
 
-/* ---------------- LOAD NEWS ---------------- */
-async function loadNews(){
-    const res = await fetch("/api/news");
-    allNews = await res.json();
+// 3. FILTER NEWS
+function renderNews() {
+  const filtered =
+    currentSport === "all"
+      ? allNews
+      : allNews.filter(n => n.sport === currentSport);
 
-    // populate sources dropdown
-    const sources = [...new Set(allNews.map(n => n.source))];
-    const sel = document.getElementById("sourceFilter");
-
-    sel.innerHTML = `<option value="">Todos los portales</option>` +
-        sources.map(s => `<option value="${s}">${s}</option>`).join("");
-
-    renderNews();
+  newsContainer.innerHTML = filtered.map(n => `
+    <div>
+      <a href="${n.link}" target="_blank">${n.title}</a>
+      <p>${n.dateOnly}</p>
+    </div>
+  `).join("");
 }
 
-/* ---------------- RENDER NEWS ---------------- */
-function renderNews(){
-    const search = document.getElementById("search").value.toLowerCase();
-    const source = document.getElementById("sourceFilter").value;
+// 4. LOAD STANDINGS (ONLY WHEN TAB IS OPEN)
+async function loadStandings() {
+  const sport = currentSport;
+  const tournament = tournamentSelect?.value || "all";
 
-    let filtered = allNews.filter(n =>
-        (!source || n.source === source) &&
-        (!search || n.title.toLowerCase().includes(search)) &&
-        (sportFilter === "all" || n.sport === sportFilter)
-    );
+  const res = await fetch(`/api/standings?sport=${sport}&tournament=${tournament}`);
+  const data = await res.json();
 
-    document.getElementById("news").innerHTML =
-    filtered.map(n => `
-        <div class="card">
-            <div class="title">${n.title}</div>
-            <div class="small">${n.source} - ${n.sport} - ${n.time}</div>
-            <a href="${n.link}" target="_blank">Leer noticia</a>
-        </div>
-    `).join("");
+  standingsContainer.innerHTML = data.map(t => `
+    <div>
+      <strong>${t.name}</strong> - ${t.points} pts
+    </div>
+  `).join("");
 }
 
-/* ---------------- TABLE (API FOOTBALL) ---------------- */
-async function loadTable(){
+// 5. TAB SWITCH
+function showTab(tab) {
+  currentTab = tab;
 
-    const league = document.getElementById("leagueSelect").value;
+  document.getElementById("newsTab").style.display = tab === "news" ? "block" : "none";
+  document.getElementById("standingsTab").style.display = tab === "standings" ? "block" : "none";
 
-    const res = await fetch(
-        `https://v3.football.api-sports.io/standings?league=${league}&season=2024`,
-        {
-            headers: {
-                "x-apisports-key": 034d49f86772190e8bd3efe1c0a5e29e
-            }
-        }
-    );
-
-    const data = await res.json();
-    const table = data.response[0].league.standings[0];
-
-    document.getElementById("standings").innerHTML =
-    table.map(t => `
-        <div ${t.team.name.includes("Gimnasia") ? "style='font-weight:bold;color:yellow'" : ""}>
-            ${t.rank}. ${t.team.name} - ${t.points}
-        </div>
-    `).join("");
+  if (tab === "standings") {
+    loadStandings();
+  }
 }
 
-/* ---------------- INIT ---------------- */
-if(localStorage.getItem("dark") === "true") toggleDark();
-
+// INIT
 loadNews();
-setInterval(loadNews, 60000);
-
 </script>
-
-</body>
-</html>
