@@ -149,9 +149,7 @@ function renderNews(news) {
     div.innerHTML = `
       <a class="title" href="${item.link}" target="_blank">${item.title}</a>
       <div class="meta">
-        <span>${item.dateOnly || item.time || ""}</span>
-        <span>${item.sport ? item.sport.toUpperCase() : "SOCCER"}</span>
-        <span>Gimnasia</span>
+        <span>${item.source || ""}</span>
       </div>
       <div class="summary">${getSummary(item.title)}</div>
     `;
