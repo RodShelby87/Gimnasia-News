@@ -114,7 +114,6 @@
     .standings-table tr.highlight { background: var(--primary-light); font-weight: 700; }
     .team-cell { display: flex; align-items: center; gap: 6px; text-align: left; }
     .team-cell img { width: 20px; height: 20px; }
-    #sectionStandings select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; background: var(--bg-card); color: var(--text); width: 100%; max-width: 400px; }
 
     .fixture-card {
       background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
@@ -202,9 +201,10 @@
     </section>
 
     <section id="sectionStandings" style="display:none;">
-      <h2 style="font-size:18px;margin-bottom:14px;">📊 Tabla de Posiciones</h2>
-      <select id="leagueSelect"><option value="">Seleccioná un torneo</option></select>
+      <h2 style="font-size:18px;margin-bottom:4px;">📊 Liga Profesional 2025</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Tabla de posiciones — Primera División</p>
       <div id="standingsContainer"></div>
+      <div id="fixturesContainer" style="margin-top:8px;"></div>
     </section>
   </div>
 
@@ -233,13 +233,13 @@ function toggleTheme() {
 initTheme();
 
 function switchSection(sec) {
-  document.getElementById("sectionNews").style.display     = sec === "news" ? "" : "none";
+  document.getElementById("sectionNews").style.display      = sec === "news" ? "" : "none";
   document.getElementById("sectionStandings").style.display = sec === "standings" ? "" : "none";
   document.querySelectorAll(".sidebar-nav button").forEach(function(b) {
     b.classList.toggle("active", b.dataset.section === sec);
   });
   document.getElementById("sidebar").classList.remove("open");
-  if (sec === "standings") loadLeagues();
+  if (sec === "standings") loadStandings();
 }
 
 function showLoading(el) {
@@ -249,6 +249,7 @@ function showEmpty(el, msg) {
   el.innerHTML = '<div class="state-msg"><div class="icon">📭</div><div class="msg">' + msg + '</div></div>';
 }
 
+/* ═══════ NEWS ═══════ */
 async function loadNews() {
   var list = document.getElementById("newsList");
   showLoading(list);
@@ -313,7 +314,7 @@ function renderNews() {
   var fR = filterArticles(recentNews);
   if (fT.length === 0 && fR.length === 0) {
     var s = currentSport === "todas" ? "" : " de " + (SPORT_LABELS[currentSport] || currentSport);
-    showEmpty(list, "No hay noticias" + s + " por el momento.");
+    showEmpty(list, "No hay noticias" + s + " en las últimas 48 horas.");
     return;
   }
   var html = "";
@@ -323,9 +324,9 @@ function renderNews() {
   }
   if (fR.length > 0) {
     if (fT.length > 0) {
-      html += '<div style="font-size:13px;font-weight:600;color:var(--text-muted);margin:24px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">📄 Noticias recientes</div>';
+      html += '<div style="font-size:13px;font-weight:600;color:var(--text-muted);margin:24px 0 10px;text-transform:uppercase;letter-spacing:0.5px;">📄 Ayer</div>';
     } else {
-      html += '<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">ℹ️ No hay noticias de hoy. Mostrando las más recientes:</div>';
+      html += '<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;">ℹ️ Sin noticias de hoy. Mostrando las de ayer:</div>';
     }
     for (var j = 0; j < fR.length; j++) html += buildCard(fR[j], true);
   }
@@ -394,24 +395,49 @@ async function loadMatch() {
 }
 
 /* ═══════ STANDINGS ═══════ */
-async function loadLeagues() {
-  var sel = document.getElementById("leagueSelect");
-  sel.innerHTML = '<option value="">Cargando torneos…</option>';
+var standingsLoaded = false;
+
+async function loadStandings() {
+  if (standingsLoaded) return; // Only call once per session
+  var container = document.getElementById("standingsContainer");
+  var fixtures  = document.getElementById("fixturesContainer");
+  showLoading(container);
+
   try {
-    var resp = await fetch("/api/standings?action=leagues");
-    var leagues = await resp.json();
-    if (!Array.isArray(leagues) || !leagues.length) {
-      sel.innerHTML = '<option value="">No se encontraron torneos activos</option>';
-      return;
+    var resp = await fetch("/api/standings");
+    var groups = await resp.json();
+    var hasStandings = Array.isArray(groups) && groups.length > 0 && Array.isArray(groups[0]) && groups[0].length > 0;
+
+    if (hasStandings) {
+      standingsLoaded = true;
+      container.innerHTML = groups.map(function(group, gi) {
+        var groupTitle = groups.length > 1 ? '<h3 style="margin:16px 0 8px;font-size:14px;">Grupo ' + (gi + 1) + '</h3>' : "";
+        return groupTitle + '<table class="standings-table"><thead><tr>' +
+          '<th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th>' +
+          '<th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr></thead><tbody>' +
+          group.map(function(r) {
+            return '<tr class="' + (r.isGimnasia ? "highlight" : "") + '">' +
+              '<td>' + r.rank + '</td>' +
+              '<td><div class="team-cell"><img src="' + r.teamLogo + '" alt=""/>' + r.teamName + '</div></td>' +
+              '<td>' + r.played + '</td><td>' + r.win + '</td><td>' + r.draw + '</td><td>' + r.lose + '</td>' +
+              '<td>' + r.goalsFor + '</td><td>' + r.goalsAgainst + '</td><td>' + r.goalDiff + '</td>' +
+              '<td><strong>' + r.points + '</strong></td></tr>';
+          }).join("") + '</tbody></table>';
+      }).join("");
+    } else {
+      // No standings yet — show next/last match
+      showEmpty(container, "La tabla de posiciones aún no está disponible.");
     }
-    sel.innerHTML = '<option value="">Seleccioná un torneo</option>';
-    leagues.forEach(function(l) {
-      var o = document.createElement("option");
-      o.value = l.id + "|" + l.season + "|" + l.type;
-      o.textContent = l.name + " " + l.season;
-      sel.appendChild(o);
-    });
-  } catch (e) { sel.innerHTML = '<option value="">Error al cargar torneos</option>'; }
+
+    // Always load fixtures alongside
+    var fResp = await fetch("/api/standings?action=nextmatch");
+    var fData = await fResp.json();
+    var fHtml = "";
+    if (fData.nextMatch) fHtml += buildFixtureCard("📅 Próximo partido", fData.nextMatch);
+    if (fData.lastMatch) fHtml += buildFixtureCard("✅ Último resultado", fData.lastMatch);
+    fixtures.innerHTML = fHtml;
+
+  } catch (e) { showEmpty(container, "Error al cargar posiciones."); }
 }
 
 function buildFixtureCard(label, fix) {
@@ -429,7 +455,6 @@ function buildFixtureCard(label, fix) {
   var scoreHtml = finished
     ? '<div class="fc-score">' + (fix.home.goals != null ? fix.home.goals : "-") + " - " + (fix.away.goals != null ? fix.away.goals : "-") + '</div>'
     : '<div class="fc-score" style="font-size:16px;color:var(--text-muted);">vs</div>';
-  var statusLine = finished ? "Final" : (fix.round || "");
   return '<div class="fixture-card">' +
     '<div class="fc-label">' + label + '</div>' +
     '<div class="fc-teams">' +
@@ -437,56 +462,18 @@ function buildFixtureCard(label, fix) {
       scoreHtml +
       '<div class="fc-team"><img src="' + (fix.away.logo || "") + '" alt=""/><span>' + fix.away.name + '</span></div>' +
     '</div>' +
-    '<div class="fc-info">' + (fix.league || "") + (statusLine ? " · " + statusLine : "") + (dateStr ? " · " + dateStr : "") + '</div>' +
+    '<div class="fc-info">' + (fix.league || "") + (fix.round ? " · " + fix.round : "") + (dateStr ? " · " + dateStr : "") + '</div>' +
   '</div>';
 }
 
-document.getElementById("leagueSelect").addEventListener("change", async function(e) {
-  var val = e.target.value;
-  var container = document.getElementById("standingsContainer");
-  if (!val) { container.innerHTML = ""; return; }
-  var parts = val.split("|");
-  var leagueId = parts[0], season = parts[1], leagueType = parts[2];
-  showLoading(container);
+function refreshAll() {
+  standingsLoaded = false;
+  loadNews();
+  loadMatch();
+  var sec = document.getElementById("sectionStandings").style.display !== "none";
+  if (sec) loadStandings();
+}
 
-  try {
-    // Try standings first
-    var resp = await fetch("/api/standings?league=" + leagueId + "&season=" + season);
-    var groups = await resp.json();
-    var hasStandings = Array.isArray(groups) && groups.length > 0 && Array.isArray(groups[0]) && groups[0].length > 0;
-
-    if (hasStandings) {
-      container.innerHTML = groups.map(function(group, gi) {
-        var groupTitle = groups.length > 1 ? '<h3 style="margin:16px 0 8px;font-size:14px;">Grupo ' + (gi + 1) + '</h3>' : "";
-        return groupTitle + '<table class="standings-table"><thead><tr>' +
-          '<th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th>' +
-          '<th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr></thead><tbody>' +
-          group.map(function(r) {
-            return '<tr class="' + (r.isGimnasia ? "highlight" : "") + '">' +
-              '<td>' + r.rank + '</td>' +
-              '<td><div class="team-cell"><img src="' + r.teamLogo + '" alt=""/>' + r.teamName + '</div></td>' +
-              '<td>' + r.played + '</td><td>' + r.win + '</td><td>' + r.draw + '</td><td>' + r.lose + '</td>' +
-              '<td>' + r.goalsFor + '</td><td>' + r.goalsAgainst + '</td><td>' + r.goalDiff + '</td>' +
-              '<td><strong>' + r.points + '</strong></td></tr>';
-          }).join("") + '</tbody></table>';
-      }).join("");
-    } else {
-      // No standings — fetch next/last match for this league
-      var mResp = await fetch("/api/standings?action=nextmatch&league=" + leagueId + "&season=" + season);
-      var mData = await mResp.json();
-      var html = "";
-      if (mData.nextMatch) html += buildFixtureCard("📅 Próximo partido", mData.nextMatch);
-      if (mData.lastMatch) html += buildFixtureCard("✅ Último resultado", mData.lastMatch);
-      if (!html) {
-        showEmpty(container, "No hay tabla ni partidos disponibles para este torneo.");
-        return;
-      }
-      container.innerHTML = html;
-    }
-  } catch (e) { showEmpty(container, "Error al cargar posiciones."); }
-});
-
-function refreshAll() { loadNews(); loadMatch(); }
 loadNews();
 loadMatch();
 </script>
