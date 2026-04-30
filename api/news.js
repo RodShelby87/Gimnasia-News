@@ -12,7 +12,11 @@ export default async function handler(req, res) {
   );
   const todayStr = argNow.toLocaleDateString("en-CA");
 
-  // ── Trusted La Plata portals — always keep articles from these ──
+  // Yesterday string for 48h fallback
+  const yesterday = new Date(argNow);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+
   const TRUSTED = [
     "eldia.com", "0221.com.ar", "infocielo.com", "cielosports",
     "diariohoy.net", "elclasico.com.ar", "infoplatense",
@@ -25,7 +29,6 @@ export default async function handler(req, res) {
     return TRUSTED.some(t => s.includes(t) || u.includes(t));
   }
 
-  // ── Exclusion: other "Gimnasia" clubs ──
   const OTHER_CLUBS = [
     "mendoza", "jujuy", "tucumán", "tucuman", "salta",
     "concepción del uruguay", "concepcion del uruguay",
@@ -45,17 +48,33 @@ export default async function handler(req, res) {
     const text = ((title || "") + " " + (desc || "")).toLowerCase();
     const hasOther = OTHER_CLUBS.some(k => text.includes(k));
     if (!hasOther) return true;
-    const hasLP = LP_MARKERS.some(k => text.includes(k));
-    return hasLP;
+    return LP_MARKERS.some(k => text.includes(k));
   }
 
-  // ── Sport detection ──
   const SPORT_KW = {
-    basquet: ["básquet", "basquet", "basketball", "liga nacional de básquet",
-              "triple", "tablero", "boffelli", "polideportivo", "nethol"],
-    voley:   ["vóley", "voley", "volleyball", "lobas", "set point", "vogel"],
-    hockey:  ["hockey", "césped", "lobizonas", "metropolitano", "palo corto"],
-    esgrima: ["esgrima", "fencing", "sable", "florete", "espada"],
+    basquet: [
+      "básquet", "basquet", "basketball", "liga nacional de básquet",
+      "triple", "tablero", "boffelli", "polideportivo", "nethol",
+      "básquetbol", "basquetbol", "cancha", "aro", "rebote",
+      "punto", "cuarto", "tiempo extra", "playoffs", "lnb",
+      "básket", "basket", "tiro libre", "escolta", "base", "pivot",
+      "alero", "pívot", "conferencia"
+    ],
+    voley: [
+      "vóley", "voley", "volleyball", "lobas", "set point", "vogel",
+      "vóleibol", "voleibol", "ace", "bloqueo", "saque", "matador",
+      "líbero", "libero", "setter", "opuesto", "receptor",
+      "primera liga", "superliga voley", "metrovoley"
+    ],
+    hockey: [
+      "hockey", "césped", "lobizonas", "metropolitano", "palo corto",
+      "stick", "penalty corner", "pc ", "shootout", "verde",
+      "argentina hockey", "hockey sobre césped", "confederación"
+    ],
+    esgrima: [
+      "esgrima", "fencing", "sable", "florete", "espada",
+      "tirador", "tiradora", "asalto", "pista", "toque"
+    ],
   };
 
   function detectSport(text) {
@@ -69,7 +88,10 @@ export default async function handler(req, res) {
       "transferencia", "primera división", "superliga", "fecha", "arbitro",
       "penal", "offside", "director técnico", "campeonato", "eliminatoria",
       "apertura", "clausura", "playoff", "bosque", "estancia chica",
-      "barros schelotto", "pereyra", "clasificación", "goleador"
+      "barros schelotto", "pereyra", "clasificación", "goleador",
+      "fútbol", "futbol", "pelota", "delantero", "defensor", "mediocampista",
+      "arquero", "portero", "hinchada", "estadio", "cancha", "wing",
+      "centrodelantero", "extremo", "volante"
     ];
     if (futbolKw.some(k => t.includes(k))) return "futbol";
     const clubKw = [
@@ -87,24 +109,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rssUrl =
-      "https://news.google.com/rss/search?" +
-      "q=%22Gimnasia+y+Esgrima+La+Plata%22+OR+%22Gimnasia+La+Plata%22+OR+GELP" +
-      "&hl=es-419&gl=AR&ceid=AR:es-419";
+    const queries = [
+      `"Gimnasia y Esgrima La Plata" OR "Gimnasia La Plata" OR GELP`,
+      `"Gimnasia La Plata" básquet OR voley OR hockey OR esgrima`,
+    ];
 
-    const resp = await fetch(rssUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; GelpNews/1.0)" },
-    });
+    const allFetches = queries.map(q =>
+      fetch(
+        `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=es-419&gl=AR&ceid=AR:es-419`,
+        { headers: { "User-Agent": "Mozilla/5.0 (compatible; GelpNews/1.0)" } }
+      ).then(r => r.text())
+    );
 
-    if (!resp.ok) {
-      return res.status(resp.status).json({
-        error: "Google News RSS error", status: resp.status,
-      });
-    }
+    const xmlTexts = await Promise.all(allFetches);
+    const allXml = xmlTexts.join("");
+    const items = [...allXml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
 
-    const xml = await resp.text();
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-
+    const seen = new Set();
     const allArticles = items.map(i => {
       const block = i[1];
       const title = (block.match(/<title>(.*?)<\/title>/) || [])[1] || "";
@@ -125,10 +146,9 @@ export default async function handler(req, res) {
         .replace(/&amp;/g, "&").replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim();
 
       const pubArg = new Date(
-        new Date(pubDate).toLocaleString("en-US", {
-          timeZone: "America/Argentina/Buenos_Aires",
-        })
+        new Date(pubDate).toLocaleString("en-US", { timeZone: "America/Argentina/Buenos_Aires" })
       );
+      const dateOnly = pubArg.toLocaleDateString("en-CA");
 
       return {
         title: cleanTitle,
@@ -136,23 +156,26 @@ export default async function handler(req, res) {
         url: link.trim(),
         image: null,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : "",
-        dateOnly: pubArg.toLocaleDateString("en-CA"),
+        dateOnly,
         source,
         sport: detectSport(cleanTitle + " " + desc),
       };
-    }).filter(a => isLaPlata(a.title, a.description, a.source, a.url));
+    })
+    .filter(a => {
+      if (!isLaPlata(a.title, a.description, a.source, a.url)) return false;
+      // Keep today + yesterday only (48h window)
+      if (a.dateOnly !== todayStr && a.dateOnly !== yesterdayStr) return false;
+      // Deduplicate by URL
+      if (seen.has(a.url)) return false;
+      seen.add(a.url);
+      return true;
+    })
+    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
-    const todayNews = allArticles
-      .filter(a => a.dateOnly === todayStr)
-      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-
-    const recentNews = allArticles
-      .filter(a => a.dateOnly !== todayStr)
-      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-      .slice(0, 10);
+    const todayNews   = allArticles.filter(a => a.dateOnly === todayStr);
+    const recentNews  = allArticles.filter(a => a.dateOnly === yesterdayStr).slice(0, 10);
 
     const result = { today: todayNews, recent: recentNews, todayDate: todayStr };
-
     globalThis._newsCache = result;
     globalThis._newsCacheTime = now;
     return res.status(200).json(result);
